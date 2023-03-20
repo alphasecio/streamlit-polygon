@@ -1,4 +1,5 @@
 import os, streamlit as st
+from tradier_python import TradierAPI
 
 # Authenticate with the Tradier API
 access_token = os.environ["TRADIER_TOKEN"]
