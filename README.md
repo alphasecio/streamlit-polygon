@@ -1,6 +1,6 @@
 # streamlit
 A sample Streamlit web application for retrieving a stock quote.
 
-For a step-by-step guide to deploying on Streamlit, see [this](https://alphasec.io/build-your-first-python-web-app-on-streamlit/) post. To deploy on [Railway](https://railway.app/?referralCode=alphasec), click the button below.
+For a step-by-step guide to deploying on Streamlit, see [this](https://alphasec.io/build-an-interactive-python-web-app-with-streamlit/) post. To deploy on [Railway](https://railway.app/?referralCode=alphasec), click the button below.
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/3D37W6?referralCode=alphasec)
