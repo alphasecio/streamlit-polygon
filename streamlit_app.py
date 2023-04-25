@@ -18,4 +18,4 @@ st.title("Stocks App")
 symbol = st.text_input("Enter a stock symbol", "AAPL")
 if st.button("Get Quote"):
     quote = get_stock_quote(symbol)
-    st.write(f"The last price for {symbol} is {quote}")
+    st.success(f"The last price for {symbol} is {quote}")
