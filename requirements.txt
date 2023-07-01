@@ -1,2 +1,2 @@
-streamlit==1.22.0
+streamlit==1.24.0
 tradier-python==0.1.3
