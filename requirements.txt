@@ -1,2 +1,2 @@
-streamlit==1.32.2
+streamlit==1.33.0
 polygon-api-client==1.13.4
