@@ -1,4 +1,4 @@
-streamlit==1.38.0
+streamlit==1.39.0
 polygon-api-client==1.14.2
-pandas==2.2.2
+pandas==2.2.3
 plotly-express==0.4.1
