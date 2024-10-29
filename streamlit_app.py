@@ -26,10 +26,8 @@ if 'historical_data' not in st.session_state:
 
 # Callback function to refresh metrics after inputs change
 def update_metrics():
-    # Triggers recalculation and update of metrics by updating a key value
     st.session_state["metrics_updated"] = True
 
-# Functions to calculate and display metrics
 def calculate_metrics(df):
     """Calculate business metrics including cost metrics."""
     try:
@@ -55,54 +53,108 @@ def create_metrics_dashboard(df):
     """Create metrics dashboard for display."""
     metrics = calculate_metrics(df)
     col1, col2, col3 = st.columns(3)
-
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
             formatted_value = f"{value:.1f}%" if "rate" in metric else f"${value:.2f}" if "cost per" in metric else f"{value:,.0f}" if isinstance(value, (float, int)) else value
             st.metric(metric, formatted_value)
 
-# Input data section with callbacks to refresh metrics on input change
-st.header("Input Your Data")
-col1, col2 = st.columns(2)
+# Tabs setup
+tab1, tab2, tab3, tab4 = st.tabs(["Input & Upload", "Analysis", "Forecasting", "Export"])
 
-with col1:
-    num_leads = st.number_input("Number of Leads:", min_value=0, value=100, on_change=update_metrics, key="leads_input")
-    num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50, on_change=update_metrics, key="appointments_input")
+with tab1:
+    st.header("Input & Upload Data")
+    col1, col2 = st.columns(2)
 
-with col2:
-    num_closings = st.number_input("Number of Closings:", min_value=0, value=25, on_change=update_metrics, key="closings_input")
-    average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", min_value=0.0, value=10000.0, on_change=update_metrics, key="revenue_per_closing")
-    cost = st.number_input("Total Cost (Enter 0 if none):", min_value=0.0, value=0.0, on_change=update_metrics, key="cost_input")
+    # Input fields
+    with col1:
+        num_leads = st.number_input("Number of Leads:", min_value=0, value=100, on_change=update_metrics, key="leads_input")
+        num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50, on_change=update_metrics, key="appointments_input")
 
-# Handle file uploads
-uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"], on_change=update_metrics)
+    with col2:
+        num_closings = st.number_input("Number of Closings:", min_value=0, value=25, on_change=update_metrics, key="closings_input")
+        average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", min_value=0.0, value=10000.0, on_change=update_metrics, key="revenue_per_closing")
+        cost = st.number_input("Total Cost (Enter 0 if none):", min_value=0.0, value=0.0, on_change=update_metrics, key="cost_input")
 
-if uploaded_file:
-    try:
-        if uploaded_file.name.endswith('.csv'):
-            st.session_state.historical_data = pd.read_csv(uploaded_file)
-        else:
-            st.session_state.historical_data = pd.read_excel(uploaded_file)
+    # File uploader
+    uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"], on_change=update_metrics)
+    if uploaded_file:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                st.session_state.historical_data = pd.read_csv(uploaded_file)
+            else:
+                st.session_state.historical_data = pd.read_excel(uploaded_file)
 
-        st.session_state.historical_data['month'] = pd.to_datetime(st.session_state.historical_data['month'], errors='coerce')
-        st.session_state.historical_data.dropna(subset=['month'], inplace=True)
-    except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
+            st.session_state.historical_data['month'] = pd.to_datetime(st.session_state.historical_data['month'], errors='coerce')
+            st.session_state.historical_data.dropna(subset=['month'], inplace=True)
+        except Exception as e:
+            st.error(f"Error loading file: {str(e)}")
 
-# Add manual input to historical data if available
-if not st.session_state.historical_data.empty:
-    new_row = pd.DataFrame({
-        'month': [pd.Timestamp('now')],
-        'leads': [st.session_state["leads_input"]],
-        'appointments': [st.session_state["appointments_input"]],
-        'closings': [st.session_state["closings_input"]],
-        'cost': [st.session_state["cost_input"]]
-    })
-    st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
+    # Combine manual input with uploaded data
+    if not st.session_state.historical_data.empty:
+        new_row = pd.DataFrame({
+            'month': [pd.Timestamp('now')],
+            'leads': [st.session_state["leads_input"]],
+            'appointments': [st.session_state["appointments_input"]],
+            'closings': [st.session_state["closings_input"]],
+            'cost': [st.session_state["cost_input"]]
+        })
+        st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
 
-st.write("Combined Data Overview:")
-st.dataframe(st.session_state.historical_data)
+    st.write("Combined Data Overview:")
+    st.dataframe(st.session_state.historical_data)
 
-# Trigger dashboard refresh based on metrics_updated key
-if "metrics_updated" in st.session_state:
-    create_metrics_dashboard(st.session_state.historical_data)
+with tab2:
+    st.header("Analysis")
+    if not st.session_state.historical_data.empty:
+        st.sidebar.header("Analysis Filters")
+        date_range = st.sidebar.date_input(
+            "Select Date Range",
+            value=(st.session_state.historical_data['month'].min(), st.session_state.historical_data['month'].max())
+        )
+
+        mask = (st.session_state.historical_data['month'].dt.date >= date_range[0]) & \
+               (st.session_state.historical_data['month'].dt.date <= date_range[1])
+        filtered_data = st.session_state.historical_data.loc[mask]
+
+        if not filtered_data.empty:
+            create_metrics_dashboard(filtered_data)
+
+            st.header("Detailed Performance Metrics")
+            metrics = calculate_metrics(filtered_data)
+            col1, col2, col3 = st.columns(3)
+            for i, (metric, value) in enumerate(metrics.items()):
+                with [col1, col2, col3][i % 3]:
+                    st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) else "N/A")
+
+with tab3:
+    st.header("Forecast Analysis")
+    if not st.session_state.historical_data.empty:
+        forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
+        x = st.session_state.historical_data[['leads', 'appointments']]
+        y = st.session_state.historical_data['closings']
+        model = LinearRegression()
+        model.fit(x, y)
+        input_data = np.array([[st.session_state["leads_input"], st.session_state["appointments_input"]]]).reshape(1, -1)
+        forecasted_closings = max(0, model.predict(input_data)[0])
+        forecasted_revenue = forecasted_closings * st.session_state["revenue_per_closing"]
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
+        with col2:
+            st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
+
+with tab4:
+    st.header("Export Data")
+    if not st.session_state.historical_data.empty:
+        forecast_data = {
+            'Metric': ['Forecasted Closings', 'Forecasted Revenue'],
+            'Value': [forecasted_closings, forecasted_revenue]
+        }
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            st.session_state.historical_data.to_excel(writer, sheet_name='historical data', index=False)
+            pd.DataFrame(forecast_data).to_excel(writer, sheet_name='forecasts', index=False)
+        excel_data = output.getvalue()
+        st.download_button(label="Download Full Report (Excel)", data=excel_data, 
+                           file_name='sales_forecast_report.xlsx', 
+                           mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
