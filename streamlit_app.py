@@ -56,6 +56,33 @@ def export_to_excel(df, forecasts):
         forecast_df.to_excel(writer, sheet_name='forecasts', index=False)
     return output.getvalue()
 
+def add_goals_tracking(df):
+    """Add goals tracking section."""
+    st.subheader("Performance Goals Tracking")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        lead_goal = st.number_input("Monthly Leads Goal:", min_value=0, value=100)
+        actual_leads = df['leads'].iloc[-1] if not df.empty else 0
+        leads_progress = (actual_leads / lead_goal) * 100 if lead_goal > 0 else 0
+        st.progress(min(leads_progress / 100, 1.0))
+        st.write(f"Latest: {actual_leads:.0f} ({leads_progress:.1f}% of goal)")
+
+    with col2:
+        appointment_goal = st.number_input("Monthly Appointments Goal:", min_value=0, value=50)
+        actual_appointments = df['appointments'].iloc[-1] if not df.empty else 0
+        appointments_progress = (actual_appointments / appointment_goal) * 100 if appointment_goal > 0 else 0
+        st.progress(min(appointments_progress / 100, 1.0))
+        st.write(f"Latest: {actual_appointments:.0f} ({appointments_progress:.1f}% of goal)")
+
+    with col3:
+        closing_goal = st.number_input("Monthly Closings Goal:", min_value=0, value=25)
+        actual_closings = df['closings'].iloc[-1] if not df.empty else 0
+        closings_progress = (actual_closings / closing_goal) * 100 if closing_goal > 0 else 0
+        st.progress(min(closings_progress / 100, 1.0))
+        st.write(f"Latest: {actual_closings:.0f} ({closings_progress:.1f}% of goal)")
+
 # Primary app logic
 if 'historical_data' not in st.session_state:
     st.session_state.historical_data = pd.DataFrame()
@@ -142,6 +169,7 @@ with st.container():
                 # Recalculate and display metrics from filtered data
                 create_metrics_dashboard(filtered_data)
 
+                # Detailed performance metrics
                 st.header("Detailed Performance Metrics")
                 metrics = calculate_metrics(filtered_data)
                 col1, col2, col3 = st.columns(3)
@@ -149,6 +177,7 @@ with st.container():
                     with [col1, col2, col3][i % 3]:
                         st.metric(metric, f"{value:.2f}")
 
+                # Seasonality analysis
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
                 if len(filtered_data) >= 12:
@@ -157,9 +186,11 @@ with st.container():
                 else:
                     st.warning("Need at least 12 months of data for seasonality analysis.")
 
+                # Historical trends
                 st.header("Historical Trends")
                 plot_interactive_trends(filtered_data)
 
+                # Conversion funnel
                 st.header("Conversion Funnel")
                 plot_conversion_funnel(filtered_data)
             else:
