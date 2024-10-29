@@ -58,6 +58,19 @@ def create_metrics_dashboard(df):
             formatted_value = f"{value:.1f}%" if "rate" in metric else f"${value:.2f}" if "cost per" in metric else f"{value:,.0f}" if isinstance(value, (float, int)) else value
             st.metric(metric, formatted_value)
 
+def plot_seasonality_analysis(df, metric):
+    """Plot seasonality analysis if data meets requirements for seasonal decomposition."""
+    if len(df) >= 24:
+        decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name="Trend"))
+        fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, name="Seasonal"))
+        fig.update_layout(title=f"Seasonality and Trend for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
+        return fig
+    else:
+        st.warning("Need at least 24 months of data for seasonality analysis.")
+        return None
+
 # Tabs setup
 tab1, tab2, tab3, tab4 = st.tabs(["Input & Upload", "Analysis", "Forecasting", "Export"])
 
@@ -125,6 +138,12 @@ with tab2:
             for i, (metric, value) in enumerate(metrics.items()):
                 with [col1, col2, col3][i % 3]:
                     st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) else "N/A")
+
+            st.header("Seasonality Analysis")
+            metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
+            seasonality_plot = plot_seasonality_analysis(filtered_data, metric_choice)
+            if seasonality_plot is not None:
+                st.plotly_chart(seasonality_plot, use_container_width=True)
 
 with tab3:
     st.header("Forecast Analysis")
