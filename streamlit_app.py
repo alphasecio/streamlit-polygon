@@ -60,6 +60,25 @@ DataFrameType = pd.DataFrame
 ModelType = LinearRegression
 PlotType = Union[Dict, go.Figure]
 
+def generate_sample_data() -> pd.DataFrame:
+    """Generate sample data for demonstration."""
+    sample_data = {
+        'month': pd.date_range(start='2023-01-01', periods=12, freq='M'),
+        'leads': np.random.randint(80, 120, 12),
+        'appointments': np.random.randint(40, 60, 12),
+        'closings': np.random.randint(20, 30, 12),
+        'cost': np.random.randint(5000, 8000, 12)
+    }
+    return pd.DataFrame(sample_data)
+
+def create_excel_template() -> bytes:
+    """Create an Excel template file."""
+    sample_df = generate_sample_data()
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        sample_df.to_excel(writer, index=False)
+    return output.getvalue()
+
 def calculate_metrics(df: DataFrameType) -> MetricsDict:
     """Calculate business metrics including cost metrics."""
     try:
@@ -321,20 +340,80 @@ def main():
                 cost = st.number_input("Total Cost ($):", min_value=0.0, value=0.0)
 
             st.header("Upload Historical Data")
-            uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
+            
+            # Sample data and templates section
+            st.subheader("Download Templates")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Generate and offer sample CSV
+                sample_df = generate_sample_data()
+                csv = sample_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Sample CSV",
+                    data=csv,
+                    file_name='sample_data.csv',
+                    mime='text/csv',
+                    help="Download a sample CSV file with example data"
+                )
+            
+            with col2:
+                # Generate and offer Excel template
+            excel_data = create_excel_template()
+                st.download_button(
+                    label="Download Excel Template",
+                    data=excel_data,
+                    file_name='template.xlsx',
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    help="Download an Excel template with example data"
+                )
+
+            # File upload section with validation
+            uploaded_file = st.file_uploader(
+                "Upload your data file (CSV or Excel)", 
+                type=["csv", "xlsx"],
+                help="Upload your historical data in either CSV or Excel format"
+            )
 
             if uploaded_file is not None:
                 try:
+                    # Read the file
                     if uploaded_file.name.endswith('.csv'):
                         data = pd.read_csv(uploaded_file)
                     else:
                         data = pd.read_excel(uploaded_file)
-
-                    data['month'] = pd.to_datetime(data['month'])
+                    
+                    # Validate required columns
+                    required_columns = ['month', 'leads', 'appointments', 'closings', 'cost']
+                    missing_columns = [col for col in required_columns if col not in data.columns]
+                    
+                    if missing_columns:
+                        st.error(f"Missing required columns: {', '.join(missing_columns)}")
+                        st.stop()
+                    
+                    # Convert month column to datetime
+                    data['month'] = pd.to_datetime(data['month'], errors='coerce')
+                    
+                    # Validate data types and values
+                    numeric_columns = ['leads', 'appointments', 'closings', 'cost']
+                    for col in numeric_columns:
+                        data[col] = pd.to_numeric(data[col], errors='coerce')
+                        if data[col].isnull().any():
+                            st.warning(f"Some {col} values were invalid and have been set to 0")
+                            data[col] = data[col].fillna(0)
+                    
+                    # Store in session state
                     st.session_state.historical_data = data
+                    
+                    # Show success message and data preview
                     st.success("Data uploaded successfully!")
+                    st.subheader("Data Preview")
+                    st.dataframe(data.head(), use_container_width=True)
+                    
                 except Exception as e:
                     st.error(f"Error loading file: {str(e)}")
+                    st.error("Please make sure your file follows the template format")
+                    st.stop()
 
             # Add current input to historical data
             new_row = pd.DataFrame({
@@ -363,7 +442,7 @@ def main():
                 
                 st.header("Conversion Analysis")
                 plot_conversion_funnel(filtered_data)
-              
+                
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox(
                     "Select metric for seasonality analysis:",
@@ -479,8 +558,7 @@ def main():
                 st.subheader("Export Preview")
                 st.dataframe(
                     st.session_state.historical_data,
-                    use_container_width=True,
-                    height=400
+                    use_container_width=True
                 )
                 
                 # Additional metrics preview
