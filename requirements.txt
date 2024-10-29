@@ -7,3 +7,4 @@ seaborn
 plotly
 statsmodels
 openpyxl
+PyYAML==6.0
