@@ -359,8 +359,8 @@ def main():
             
                 with col2:
                 # Generate and offer Excel template
-                excel_data = create_excel_template()
-                st.download_button(
+                    excel_data = create_excel_template()
+                    st.download_button(
                     label="Download Excel Template",
                     data=excel_data,
                     file_name='template.xlsx',
