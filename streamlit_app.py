@@ -20,7 +20,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Define function for calculating metrics
 def calculate_metrics(df):
     """Calculate business metrics including cost metrics."""
     try:
@@ -37,14 +36,56 @@ def calculate_metrics(df):
             'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
             'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
         }
-        # Ensure all metrics are valid numbers or set to "N/A"
-        metrics = {k: (v if pd.notna(v) and isinstance(v, (int, float)) else 'N/A') for k, v in metrics.items()}
-        return metrics
+        return {k: (v if pd.notna(v) and isinstance(v, (int, float)) else 'N/A') for k, v in metrics.items()}
     except Exception as e:
         st.error(f"Error calculating metrics: {str(e)}")
         return {}
 
-# Define functions for plotting
+def create_metrics_dashboard(df):
+    """Create metrics dashboard for display."""
+    st.header("Key Metrics Dashboard")
+    metrics = calculate_metrics(df)
+    col1, col2, col3 = st.columns(3)
+
+    for i, (metric, value) in enumerate(metrics.items()):
+        with [col1, col2, col3][i % 3]:
+            formatted_value = f"{value:.1f}%" if "rate" in metric else f"${value:.2f}" if "cost per" in metric else f"{value:,.0f}" if isinstance(value, (float, int)) else value
+            st.metric(metric, formatted_value)
+
+def export_to_excel(df, forecasts):
+    """Create and return an Excel file with data and forecasts."""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='historical data', index=False)
+        pd.DataFrame(forecasts).to_excel(writer, sheet_name='forecasts', index=False)
+    return output.getvalue()
+
+def add_goals_tracking(df):
+    """Add goals tracking section."""
+    st.subheader("Performance Goals Tracking")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        lead_goal = st.number_input("Monthly Leads Goal:", min_value=0, value=100)
+        actual_leads = df['leads'].iloc[-1] if not df.empty else 0
+        leads_progress = (actual_leads / lead_goal) * 100 if lead_goal > 0 else 0
+        st.progress(min(leads_progress / 100, 1.0))
+        st.write(f"Latest: {actual_leads:.0f} ({leads_progress:.1f}% of goal)")
+
+    with col2:
+        appointment_goal = st.number_input("Monthly Appointments Goal:", min_value=0, value=50)
+        actual_appointments = df['appointments'].iloc[-1] if not df.empty else 0
+        appointments_progress = (actual_appointments / appointment_goal) * 100 if appointment_goal > 0 else 0
+        st.progress(min(appointments_progress / 100, 1.0))
+        st.write(f"Latest: {actual_appointments:.0f} ({appointments_progress:.1f}% of goal)")
+
+    with col3:
+        closing_goal = st.number_input("Monthly Closings Goal:", min_value=0, value=25)
+        actual_closings = df['closings'].iloc[-1] if not df.empty else 0
+        closings_progress = (actual_closings / closing_goal) * 100 if closing_goal > 0 else 0
+        st.progress(min(closings_progress / 100, 1.0))
+        st.write(f"Latest: {actual_closings:.0f} ({closings_progress:.1f}% of goal)")
+
 def plot_seasonality_analysis(df, metric):
     decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
     fig = go.Figure()
@@ -65,41 +106,6 @@ def plot_conversion_funnel(df):
     fig.update_layout(title="Conversion Funnel")
     st.plotly_chart(fig, use_container_width=True)
 
-# Define add_goals_tracking placeholder
-def add_goals_tracking(df):
-    # Placeholder for actual goal tracking logic
-    return df
-
-# Define function for exporting to Excel
-def export_to_excel(df, forecasts):
-    """Create and return an Excel file with data and forecasts."""
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name='historical data', index=False)
-        forecast_df = pd.DataFrame(forecasts)
-        forecast_df.to_excel(writer, sheet_name='forecasts', index=False)
-    return output.getvalue()
-
-# Define the metrics dashboard
-def create_metrics_dashboard(df):
-    """Create metrics dashboard for display."""
-    st.header("Key Metrics Dashboard")
-    metrics = calculate_metrics(df)
-    col1, col2, col3 = st.columns(3)
-
-    for i, (metric, value) in enumerate(metrics.items()):
-        with [col1, col2, col3][i % 3]:
-            if isinstance(value, (float, int)) and pd.notna(value):
-                if "rate" in metric:
-                    formatted_value = f"{value:.1f}%"
-                elif "cost per" in metric:
-                    formatted_value = f"${value:.2f}"
-                else:
-                    formatted_value = f"{value:,.0f}"
-            else:
-                formatted_value = "N/A"  # Display "N/A" if value is not numeric
-            st.metric(metric, formatted_value)
-
 # Primary app logic
 if 'historical_data' not in st.session_state:
     st.session_state.historical_data = pd.DataFrame()
@@ -119,10 +125,8 @@ with st.container():
 
         with col2:
             num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
-            average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", 
-                                                            min_value=0.0, 
-                                                            value=10000.0)
-            cost = st.number_input("Total Cost (Enter 0 if none):", min_value=0.0, value=0.0)  # Default to 0
+            average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", min_value=0.0, value=10000.0)
+            cost = st.number_input("Total Cost (Enter 0 if none):", min_value=0.0, value=0.0)
 
         # File upload section
         st.header("Upload Historical Data")
@@ -135,7 +139,6 @@ with st.container():
                 else:
                     st.session_state.historical_data = pd.read_excel(uploaded_file)
 
-                # Ensure 'month' column is in datetime format
                 st.session_state.historical_data['month'] = pd.to_datetime(st.session_state.historical_data['month'], errors='coerce')
                 st.session_state.historical_data.dropna(subset=['month'], inplace=True)
                 st.write("Uploaded Data Overview:")
@@ -144,29 +147,19 @@ with st.container():
                 st.error(f"Error loading file: {str(e)}")
 
         # Combine manual input with uploaded data
-        if not st.session_state.historical_data.empty:  # If there is uploaded data
-            new_row = pd.DataFrame({
-                'month': [pd.Timestamp('now')],
-                'leads': [num_leads],
-                'appointments': [num_appointments],
-                'closings': [num_closings],
-                'cost': [cost]  # Include cost in the new row
-            })
-            st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
-
-        else:  # No uploaded data; create DataFrame with manual input only
-            st.session_state.historical_data = pd.DataFrame({
-                'month': [pd.Timestamp('now')],
-                'leads': [num_leads],
-                'appointments': [num_appointments],
-                'closings': [num_closings],
-                'cost': [cost]  # Include cost in the new DataFrame
-            })
+        new_row = pd.DataFrame({
+            'month': [pd.Timestamp('now')],
+            'leads': [num_leads],
+            'appointments': [num_appointments],
+            'closings': [num_closings],
+            'cost': [cost]
+        })
+        st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
 
         st.write("Combined Data Overview:")
         st.dataframe(st.session_state.historical_data)
 
-        create_metrics_dashboard(st.session_state.historical_data)  # Dynamic metrics display
+        create_metrics_dashboard(st.session_state.historical_data)
 
     with tab2:
         # Perform additional analysis if data is available
@@ -174,20 +167,13 @@ with st.container():
             st.sidebar.header("Analysis Filters")
             date_range = st.sidebar.date_input(
                 "Select Date Range",
-                value=(
-                    st.session_state.historical_data['month'].min(),
-                    st.session_state.historical_data['month'].max()
-                )
+                value=(st.session_state.historical_data['month'].min(), st.session_state.historical_data['month'].max())
             )
 
-            if date_range and all(date_range):
-                mask = (st.session_state.historical_data['month'] >= pd.to_datetime(date_range[0])) & \
-                       (st.session_state.historical_data['month'] <= pd.to_datetime(date_range[1]))
-                filtered_data = st.session_state.historical_data.loc[mask]
-            else:
-                filtered_data = st.session_state.historical_data
+            mask = (st.session_state.historical_data['month'].dt.date >= date_range[0]) & \
+                   (st.session_state.historical_data['month'].dt.date <= date_range[1])
+            filtered_data = st.session_state.historical_data.loc[mask]
 
-            # Only call add_goals_tracking if there is data
             if not filtered_data.empty:
                 add_goals_tracking(filtered_data)
 
@@ -199,7 +185,7 @@ with st.container():
                 col1, col2, col3 = st.columns(3)
                 for i, (metric, value) in enumerate(metrics.items()):
                     with [col1, col2, col3][i % 3]:
-                        st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) and pd.notna(value) else "N/A")
+                        st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) else "N/A")
 
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
@@ -259,15 +245,11 @@ with st.container():
     with tab4:
         st.header("Export Data")
         if not st.session_state.historical_data.empty:
-            forecasted_closings = globals().get('forecasted_closings', 0)
-            forecasted_revenue = globals().get('forecasted_revenue', 0)
-
             forecast_data = {
                 'Metric': ['Forecasted Closings', 'Forecasted Revenue'],
                 'Value': [forecasted_closings, forecasted_revenue]
             }
 
-            # Create Excel file
             excel_data = export_to_excel(filtered_data, forecast_data)
 
             col1, col2 = st.columns(2)
