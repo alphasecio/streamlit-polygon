@@ -5,3 +5,5 @@ scikit-learn>=1.0
 matplotlib
 seaborn
 plotly
+statsmodels
+openpyxl
