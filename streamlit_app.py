@@ -14,10 +14,10 @@ import base64
 from statsmodels.tsa.seasonal import seasonal_decompose
 import calendar
 
-# add this at the top of your script for consistent styling
+# Add this at the top of your script for consistent styling
 st.set_page_config(layout="wide")
 
-# custom css to improve layout
+# Custom CSS to improve layout
 st.markdown("""
     <style>
     .stmetric .stmetriclabel {font-size: 14px !important;}
@@ -36,14 +36,14 @@ def export_to_excel(df, forecasts):
     """Create and return an Excel file with data and forecasts."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # historical data sheet
+        # Historical data sheet
         df.to_excel(writer, sheet_name='historical data', index=False)
 
-        # forecasts sheet
-        pd.DataFrame(forecasts, index=[0]).to_excel(
-            writer, sheet_name='forecasts', index=False)
+        # Forecasts: put forecasts in a DataFrame format
+        forecast_df = pd.DataFrame(forecasts)
+        forecast_df.to_excel(writer, sheet_name='forecasts', index=False)
 
-        # monthly patterns sheet
+        # Monthly patterns sheet
         patterns = pd.DataFrame({
             'month': calendar.month_name[1:],
             'avg leads': calculate_seasonal_patterns(df, 'leads'),
@@ -56,16 +56,16 @@ def export_to_excel(df, forecasts):
 
 def plot_seasonality_analysis(df, metric):
     """Create seasonal decomposition plot."""
-    # ensure data is sorted and indexed by date
+    # Ensure data is sorted and indexed by date
     df_sorted = df.sort_values('month').set_index('month')
 
-    # perform seasonal decomposition
+    # Perform seasonal decomposition
     decomposition = seasonal_decompose(df_sorted[metric], period=12, model='additive')
 
-    # create subplot figure
+    # Create subplot figure
     fig = go.Figure()
 
-    # original data
+    # Original data
     fig.add_trace(go.Scatter(
         x=df_sorted.index,
         y=decomposition.observed,
@@ -73,7 +73,7 @@ def plot_seasonality_analysis(df, metric):
         line=dict(color='blue')
     ))
 
-    # trend
+    # Trend
     fig.add_trace(go.Scatter(
         x=df_sorted.index,
         y=decomposition.trend,
@@ -81,7 +81,7 @@ def plot_seasonality_analysis(df, metric):
         line=dict(color='red')
     ))
 
-    # seasonal
+    # Seasonal
     fig.add_trace(go.Scatter(
         x=df_sorted.index,
         y=decomposition.seasonal,
@@ -341,14 +341,8 @@ if uploaded_file is not None:
 
             # Prepare forecast data for export
             forecast_data = {
-                'Metric': ['Leads', 'Appointments', 'Closings', 'Forecasted Revenue'],
-                'Current': [num_leads, num_appointments, forecasted_closings, forecasted_revenue],
-                'Historical Average': [
-                    filtered_data['leads'].mean(),
-                    filtered_data['appointments'].mean(),
-                    filtered_data['closings'].mean(),
-                    filtered_data['closings'].mean() * average_revenue_per_closing
-                ]
+                'Metric': ['Forecasted Closings', 'Forecasted Revenue'],
+                'Value': [forecasted_closings, forecasted_revenue]
             }
 
             # Create Excel file
