@@ -1,143 +1,109 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from polygon import RESTClient
-from datetime import datetime, timedelta
+import numpy as np
+from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Initialize session state variables
-if 'stock_types' not in st.session_state:
-    st.session_state.stock_types = ""
-if 'exchanges' not in st.session_state:
-    st.session_state.exchanges = ""
+# Title of the app
+st.title("Lead, Appointment, and Closing Stats Forecaster")
 
-# Streamlit app details
-st.set_page_config(page_title="Financial Analysis", layout="wide")
-with st.sidebar:
-    st.title("Financial Analysis")
-    ticker = st.text_input("Stock ticker (e.g. AAPL)", "AAPL")
-    polygon_api_key = st.text_input("Polygon API key", type="password")
-    button = st.button("Submit")
+# Input section for user manual input (optional, you can choose to remove this later)
+st.header("Input Your Data Manually (Optional)")
+num_leads = st.number_input("Number of Leads:", min_value=0)
+num_appointments = st.number_input("Number of Appointments:", min_value=0)
+num_closings = st.number_input("Number of Closings:", min_value=0)
 
-# Authenticate with the Polygon API
-client = RESTClient(polygon_api_key)
+# Create a CSV file with headers and sample data for download
+sample_data = {
+    'month': ['2023-01-01', '2023-02-01', '2023-03-01'],
+    'leads': [0, 0, 0],
+    'appointments': [0, 0, 0],
+    'closings': [0, 0, 0]
+}
 
-# Get stock ticker type description for a given code
-@st.cache_data
-def get_stock_type(code):
-    for stock_type in st.session_state.stock_types:
-        if stock_type.code == code:
-            return stock_type.description
-    return None
+# Create a DataFrame
+sample_df = pd.DataFrame(sample_data)
 
-# Get stock exchange name for a given code
-@st.cache_data
-def get_exchange_name(code):
-    for exchange in st.session_state.exchanges:
-        if exchange.mic == code:
-            return exchange.name
-    return None
+# Save DataFrame to a CSV file in memory
+csv_file = sample_df.to_csv(index=False).encode('utf-8')
 
-# Format market cap and financial info into readable values
-@st.cache_data
-def format_value(value):
-    suffixes = ["", "K", "M", "B", "T"]
-    suffix_index = 0
-    while value >= 1000 and suffix_index < len(suffixes) - 1:
-        value /= 1000
-        suffix_index += 1
-    return f"${value:.1f}{suffixes[suffix_index]}"
+# Create a download button for the CSV file
+st.download_button(
+    label="Download Example CSV",
+    data=csv_file,
+    file_name='example_data.csv',
+    mime='text/csv',
+)
 
-# If Submit button is clicked
-if button:
-    if not polygon_api_key.strip():
-        st.error("Please provide a valid API key.")
-    elif not ticker.strip():
-        st.error("Please provide a valid stock ticker.")
-    else:
-        try:
-            with st.spinner('Please wait...'):
-                # Get supported stock ticker types
-                if not st.session_state.stock_types:
-                    st.session_state.stock_types = client.get_ticker_types(asset_class='stocks')
+# Prompt for CSV file structure
+st.info("Please upload a CSV file with the following columns: 'month', 'leads', 'appointments', 'closings'.")
+st.write("**Example CSV Format:**")
+st.write("```\nmonth,leads,appointments,closings\n2023-01-01,0,0,0\n2023-02-01,0,0,0\n```")
 
-                # Get supported stock exchanges
-                if not st.session_state.exchanges:
-                    st.session_state.exchanges = client.get_exchanges(asset_class='stocks')
+uploaded_file = st.file_uploader("Upload Your Updated CSV File", type=["csv"])
 
-                # Retrieve stock ticker details
-                info = client.get_ticker_details(ticker)
-                st.subheader(f"{ticker} - {info.name}")
+if uploaded_file is not None:
+    try:
+        # Read the uploaded CSV file
+        historical_data = pd.read_csv(uploaded_file)
 
-                # Plot historical price chart for the last 30 days
-                end_date = datetime.now().date()
-                start_date = end_date - timedelta(days=30)
-
-                history = client.list_aggs(ticker, 1, 'day', start_date, end_date, limit=50)
-                chart_data = pd.DataFrame(history) 
-                chart_data['timestamp'] = pd.to_datetime(chart_data['timestamp'], unit='ms') 
-                chart_data['date'] = chart_data['timestamp'].dt.strftime('%Y-%m-%d')
-                
-                price_chart = px.line(chart_data, x='date', y='close', width=1000, height=400, line_shape='spline')
-                price_chart.update_layout(
-                    xaxis_title="Date",         
-                    yaxis_title="Price"
-                )
-
-                st.plotly_chart(price_chart)
-
-                col1, col2, col3 = st.columns(3)
-
-                # Display stock information as a dataframe
-                stock_info = [
-                    ("Stock Info", "Value"),
-                    ("Type", get_stock_type(info.type)),
-                    ("Primary Exchange", get_exchange_name(info.primary_exchange)),
-                    ("Listing Date", info.list_date),
-                    ("Market Cap", format_value(info.market_cap)),
-                    ("Employees", f"{info.total_employees:,.0f}"),
-                    ("Website", info.homepage_url.replace("https://", ""))
-                ]
-                
-                df = pd.DataFrame(stock_info[1:], columns=stock_info[0])
-                col1.dataframe(df, width=400, hide_index=True)
-                
-                # Display price information as a dataframe
-                agg = client.get_previous_close_agg(ticker)
-
-                price_info = [
-                    ("Price Info", "Value"),
-                    ("Prev Day Close", f"${agg[0].close:.2f}"),
-                    ("Prev Day Open", f"${agg[0].open:.2f}"),
-                    ("Prev Day High", f"${agg[0].high:.2f}"),
-                    ("Prev Day Low", f"${agg[0].low:.2f}"),
-                    ("Volume", f"{"{:,.0f}".format(agg[0].volume)}"),
-                    ("VW Avg Price", f"${agg[0].vwap:.2f}")
-                ]
-                
-                df = pd.DataFrame(price_info[1:], columns=price_info[0])
-                col2.dataframe(df, width=400, hide_index=True)
-                
-                # Display historical financial information as a dataframe
-                fin = client.vx.list_stock_financials(ticker, sort='filing_date', order='desc', limit=2)
-                
-                for item in fin:
-                    break
-                
-                fin_metrics = [
-                     ("Financial Metrics", "Value"),
-                    ("Fiscal Period", item.fiscal_period + " " + item.fiscal_year),
-                    ("Total Assets", format_value(item.financials.balance_sheet['assets'].value)),
-                    ("Total Liabilities", format_value(item.financials.balance_sheet['liabilities'].value)),
-                    ("Revenues", format_value(item.financials.income_statement.revenues.value)),
-                    ("Net Cash Flow", format_value(item.financials.cash_flow_statement.net_cash_flow.value)),
-                    ("Basic EPS", f"${item.financials.income_statement.basic_earnings_per_share.value}")
-                ]
-                
-                df = pd.DataFrame(fin_metrics[1:], columns=fin_metrics[0])
-                col3.dataframe(df, width=400, hide_index=True)
-
-        except Exception as e:
-            if "too many 429 error responses" in str(e):
-                st.error("Max retries exceeded! Please upgrade your Polygon API plan or wait for a while...")
+        # Validate the structure of the uploaded data
+        required_columns = ['month', 'leads', 'appointments', 'closings']
+        if not all(column in historical_data.columns for column in required_columns):
+            st.error("Uploaded file must contain the following columns: " + ", ".join(required_columns))
+        else:
+            # Check for non-negative values
+            if (historical_data[['leads', 'appointments', 'closings']] < 0).any().any():
+                st.error("Values in 'leads', 'appointments', and 'closings' must be non-negative.")
             else:
-                st.exception(f"An error occurred: {e}")
+                # Proceed with the analysis if data is valid
+                historical_data['month'] = pd.to_datetime(historical_data['month'])  # Ensure month is in datetime format
+                historical_data.sort_values('month', inplace=True)  # Sort by month
+
+                # Fit the model
+                X = historical_data[['leads', 'appointments']]
+                y = historical_data['closings']
+                model = LinearRegression()
+                model.fit(X, y)
+
+                # Make a forecast based on the user input or the last row of the uploaded data
+                input_data = np.array([[num_leads, num_appointments]]).reshape(1, -1)
+                forecasted_closings = model.predict(input_data)[0]
+
+                # Button to calculate forecast
+                if st.button("Forecast"):
+                    st.success(f"Forecasted Closings: {forecasted_closings}")
+
+                    # Visualizing the data
+                    st.header("Forecast Visualization")
+                    forecast_data = {
+                        'Categories': ['Leads', 'Appointments', 'Forecasted Closings'],
+                        'Values': [num_leads, num_appointments, forecasted_closings]
+                    }
+                    df_forecast = pd.DataFrame(forecast_data)
+                    st.bar_chart(df_forecast.set_index('Categories'), use_container_width=True)
+
+                    # Line chart for historical trends
+                    st.header("Historical Data Trends")
+                    plt.figure(figsize=(10, 5))
+                    sns.lineplot(data=historical_data, x='month', y='leads', label='Leads', color='blue')
+                    sns.lineplot(data=historical_data, x='month', y='appointments', label='Appointments', color='orange')
+                    sns.lineplot(data=historical_data, x='month', y='closings', label='Closings', color='green')
+                    plt.title('Historical Trends')
+                    plt.xlabel('Month')
+                    plt.ylabel('Count')
+                    plt.xticks(rotation=45)
+                    plt.legend()
+                    st.pyplot(plt)
+
+                    # Displaying the uploaded historical data alongside the forecast
+                    st.header("Data Overview")
+                    st.dataframe(historical_data)
+
+                    # Displaying forecasted closings in context
+                    st.write("**Forecasted Closings Based on User Input:**")
+                    st.write(f"Forecasted Closings: ${forecasted_closings:.2f}")
+
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
