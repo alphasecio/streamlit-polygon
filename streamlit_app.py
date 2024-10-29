@@ -58,7 +58,7 @@ st.markdown("""
 MetricsDict = Dict[str, Union[float, str, int]]
 DataFrameType = pd.DataFrame
 ModelType = LinearRegression
-PlotType = go.Figure
+PlotType = Union[Dict, go.Figure]
 
 def calculate_metrics(df: DataFrameType) -> MetricsDict:
     """Calculate business metrics including cost metrics."""
@@ -141,7 +141,7 @@ def add_goals_tracking(df: DataFrameType) -> None:
         st.write(f"Latest: {actual_closings:.0f} ({closings_progress:.1f}% of goal)")
 
 def plot_seasonality_analysis(df: DataFrameType, metric: str) -> Optional[PlotType]:
-    """Plot seasonal decomposition analysis with error handling."""
+    """Plot seasonal decomposition analysis."""
     if len(df) < 24:
         st.warning("Insufficient data for reliable seasonal decomposition (need 24+ months).")
         return None
@@ -154,36 +154,82 @@ def plot_seasonality_analysis(df: DataFrameType, metric: str) -> Optional[PlotTy
         # Perform decomposition
         decomposed = seasonal_decompose(df_sorted[metric], model='additive', period=12)
         
-        # Create figure dictionary (Plotly expects dict format)
-        fig_dict = {
-            'data': [
-                {
-                    'type': 'scatter',
-                    'x': decomposed.trend.index,
-                    'y': decomposed.trend,
-                    'name': 'Trend',
-                    'line': {'color': '#2196F3', 'width': 2}
-                },
-                {
-                    'type': 'scatter',
-                    'x': decomposed.seasonal.index,
-                    'y': decomposed.seasonal,
-                    'name': 'Seasonal',
-                    'line': {'color': '#4CAF50', 'width': 2}
-                }
-            ],
-            'layout': {
-                'title': f"Seasonality and Trend Analysis for {metric.capitalize()}",
-                'xaxis': {'title': 'Date'},
-                'yaxis': {'title': metric.capitalize()},
-                'template': 'plotly_white',
-                'height': 500
-            }
-        }
-        return fig_dict
+        # Create figure
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=decomposed.trend.index,
+            y=decomposed.trend,
+            name='Trend',
+            line=dict(color='#2196F3', width=2)
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=decomposed.seasonal.index,
+            y=decomposed.seasonal,
+            name='Seasonal',
+            line=dict(color='#4CAF50', width=2)
+        ))
+        
+        fig.update_layout(
+            title=f"Seasonality and Trend Analysis for {metric.capitalize()}",
+            xaxis_title="Date",
+            yaxis_title=metric.capitalize(),
+            template="plotly_white",
+            height=500
+        )
+        
+        return fig
     except Exception as e:
         st.error(f"Error in seasonal decomposition: {str(e)}")
         return None
+
+def plot_interactive_trends(df: DataFrameType) -> None:
+    """Plot interactive historical trends."""
+    fig = px.line(df, x='month', y=['leads', 'appointments', 'closings'],
+                  title="Historical Performance Trends")
+    
+    fig.update_layout(
+        xaxis_title="Month",
+        yaxis_title="Count",
+        hovermode='x unified',
+        template="plotly_white",
+        height=500,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def plot_conversion_funnel(df: DataFrameType) -> None:
+    """Plot conversion funnel with percentages."""
+    values = [df['leads'].sum(), df['appointments'].sum(), df['closings'].sum()]
+    labels = ['Leads', 'Appointments', 'Closings']
+    
+    rates = [100]  # First stage is 100%
+    for i in range(1, len(values)):
+        rate = (values[i] / values[i-1] * 100) if values[i-1] > 0 else 0
+        rates.append(rate)
+    
+    fig = go.Figure(go.Funnel(
+        y=labels,
+        x=values,
+        textinfo="value+percent initial",
+        textposition="inside",
+        textfont=dict(size=14),
+        marker=dict(color=["#2196F3", "#4CAF50", "#FFC107"])
+    ))
+    
+    fig.update_layout(
+        title="Conversion Funnel Analysis",
+        height=500,
+        template="plotly_white"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 def train_forecast_model(df: DataFrameType) -> Tuple[Optional[ModelType], Dict[str, float]]:
     """Train forecasting model with proper feature names."""
@@ -235,101 +281,6 @@ def predict_closings(model: Optional[ModelType],
     except Exception as e:
         return 0.0, str(e)
 
-# Update the tab3 (Forecasting) section to use these functions:
-with tab3:
-    st.header("Forecast Analysis")
-    st.subheader("Model Configuration")
-    forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
-
-    if not st.session_state.historical_data.empty:
-        # Train model
-        model, model_metrics = train_forecast_model(st.session_state.historical_data)
-        
-        if model is not None:
-            # Make prediction
-            forecasted_closings, prediction_status = predict_closings(
-                model, num_leads, num_appointments)
-            
-            if prediction_status == "Success":
-                forecasted_revenue = forecasted_closings * average_revenue_per_closing
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
-                with col2:
-                    st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
-
-                # Display model metrics
-                st.subheader("Model Performance Metrics")
-                col1, col2, col3 = st.columns(3)
-                
-                col1.metric("Mean Absolute Error", 
-                          f"{model_metrics['mae']:.2f}")
-                col2.metric("Root Mean Square Error", 
-                          f"{model_metrics['rmse']:.2f}")
-                
-                if not np.isnan(model_metrics['r2']):
-                    r2_value = model_metrics['r2']
-                    col3.metric("R² Score", f"{r2_value:.2f}")
-                    
-                    if r2_value < 0.5:
-                        st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
-                else:
-                    st.info("R² score requires more than two samples for calculation.")
-            else:
-                st.error(f"Prediction error: {prediction_status}")
-    else:
-        st.warning("No data available for forecasting. Please upload data or enter manual inputs.")
-
-def plot_interactive_trends(df: DataFrameType) -> None:
-    """Plot interactive historical trends."""
-    fig = px.line(df, x='month', y=['leads', 'appointments', 'closings'],
-                  title="Historical Performance Trends")
-    
-    fig.update_layout(
-        xaxis_title="Month",
-        yaxis_title="Count",
-        hovermode='x unified',
-        template="plotly_white",
-        height=500,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        )
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-def plot_conversion_funnel(df: DataFrameType) -> None:
-    """Plot conversion funnel with percentages."""
-    values = [df['leads'].sum(), df['appointments'].sum(), df['closings'].sum()]
-    labels = ['Leads', 'Appointments', 'Closings']
-    
-    # Calculate conversion rates
-    rates = [100]  # First stage is 100%
-    for i in range(1, len(values)):
-        rate = (values[i] / values[i-1] * 100) if values[i-1] > 0 else 0
-        rates.append(rate)
-    
-    # Create funnel chart
-    fig = go.Figure(go.Funnel(
-        y=labels,
-        x=values,
-        textinfo="value+percent initial",
-        textposition="inside",
-        textfont=dict(size=14),
-        marker=dict(color=["#2196F3", "#4CAF50", "#FFC107"])
-    ))
-    
-    fig.update_layout(
-        title="Conversion Funnel Analysis",
-        height=500,
-        template="plotly_white"
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
 def export_to_excel(df: DataFrameType, forecasts: Dict[str, Any]) -> bytes:
     """Create and return an Excel file with data and forecasts."""
     output = io.BytesIO()
@@ -350,12 +301,194 @@ if 'historical_data' not in st.session_state:
 
 # Main application logic
 def main():
-    """Main application entry point."""
+    st.title("Sales Pipeline Analytics and Forecasting")
+    
     with st.container():
         tab1, tab2, tab3, tab4 = st.tabs(["Input & Upload", "Analysis", "Forecasting", "Export"])
         
-        # Tab content implementations follow...
-        # (The rest of the main logic remains the same as in your original code)
+        with tab1:
+            st.header("Input Your Data")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                num_leads = st.number_input("Number of Leads:", min_value=0, value=100)
+                num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50)
+            
+            with col2:
+                num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
+                average_revenue_per_closing = st.number_input("Average Revenue per Closing ($):", 
+                                                            min_value=0.0, value=10000.0)
+                cost = st.number_input("Total Cost ($):", min_value=0.0, value=0.0)
+
+            st.header("Upload Historical Data")
+            uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
+
+            if uploaded_file is not None:
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        data = pd.read_csv(uploaded_file)
+                    else:
+                        data = pd.read_excel(uploaded_file)
+
+                    data['month'] = pd.to_datetime(data['month'])
+                    st.session_state.historical_data = data
+                    st.success("Data uploaded successfully!")
+                except Exception as e:
+                    st.error(f"Error loading file: {str(e)}")
+
+            # Add current input to historical data
+            new_row = pd.DataFrame({
+                'month': [pd.Timestamp.now()],
+                'leads': [num_leads],
+                'appointments': [num_appointments],
+                'closings': [num_closings],
+                'cost': [cost]
+            })
+            
+            if not st.session_state.historical_data.empty:
+                st.session_state.historical_data = pd.concat(
+                    [st.session_state.historical_data, new_row], 
+                    ignore_index=True
+                )
+
+        with tab2:
+            if not st.session_state.historical_data.empty:
+                filtered_data = st.session_state.historical_data
+                
+                add_goals_tracking(filtered_data)
+                create_metrics_dashboard(filtered_data)
+                
+                st.header("Performance Analysis")
+                plot_interactive_trends(filtered_data)
+                
+                st.header("Conversion Analysis")
+                plot_conversion_funnel(filtered_data)
+              
+                st.header("Seasonality Analysis")
+                metric_choice = st.selectbox(
+                    "Select metric for seasonality analysis:",
+                    ['leads', 'appointments', 'closings']
+                )
+                
+                if len(filtered_data) >= 24:
+                    fig = plot_seasonality_analysis(filtered_data, metric_choice)
+                    if fig is not None:
+                        st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Need at least 24 months of data for reliable seasonality analysis")
+            else:
+                st.warning("No data available for analysis. Please upload data or enter manual inputs.")
+
+        with tab3:
+            st.header("Forecast Analysis")
+            st.subheader("Model Configuration")
+            forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
+
+            if not st.session_state.historical_data.empty:
+                # Train model
+                model, model_metrics = train_forecast_model(st.session_state.historical_data)
+                
+                if model is not None:
+                    # Make prediction
+                    forecasted_closings, prediction_status = predict_closings(
+                        model, num_leads, num_appointments)
+                    
+                    if prediction_status == "Success":
+                        forecasted_revenue = forecasted_closings * average_revenue_per_closing
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric(
+                                "Forecasted Closings",
+                                f"{forecasted_closings:.1f}",
+                                help="Predicted number of closings based on current leads and appointments"
+                            )
+                        with col2:
+                            st.metric(
+                                "Forecasted Revenue",
+                                f"${forecasted_revenue:,.2f}",
+                                help="Predicted revenue based on forecasted closings"
+                            )
+
+                        # Display model metrics
+                        st.subheader("Model Performance Metrics")
+                        col1, col2, col3 = st.columns(3)
+                        
+                        col1.metric(
+                            "Mean Absolute Error",
+                            f"{model_metrics['mae']:.2f}",
+                            help="Average absolute difference between predicted and actual values"
+                        )
+                        col2.metric(
+                            "Root Mean Square Error",
+                            f"{model_metrics['rmse']:.2f}",
+                            help="Square root of the average squared differences between predicted and actual values"
+                        )
+                        
+                        if not np.isnan(model_metrics['r2']):
+                            r2_value = model_metrics['r2']
+                            col3.metric(
+                                "R² Score",
+                                f"{r2_value:.2f}",
+                                help="Proportion of variance in the target that is predictable from the features"
+                            )
+                            
+                            if r2_value < 0.5:
+                                st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+                        else:
+                            st.info("R² score requires more than two samples for calculation.")
+                    else:
+                        st.error(f"Prediction error: {prediction_status}")
+            else:
+                st.warning("No data available for forecasting. Please upload data or enter manual inputs.")
+
+        with tab4:
+            st.header("Export Data")
+            if not st.session_state.historical_data.empty:
+                # Prepare forecast data
+                forecast_data = {
+                    'Metric': ['Forecasted Closings', 'Forecasted Revenue'],
+                    'Value': [forecasted_closings, forecasted_revenue],
+                    'Date': [datetime.now().strftime('%Y-%m-%d')] * 2
+                }
+
+                # Create Excel file
+                excel_data = export_to_excel(st.session_state.historical_data, forecast_data)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        label="Download Full Report (Excel)",
+                        data=excel_data,
+                        file_name='sales_forecast_report.xlsx',
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        help="Download complete report including historical data, forecasts, and metrics"
+                    )
+                
+                with col2:
+                    csv = st.session_state.historical_data.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="Download Historical Data (CSV)",
+                        data=csv,
+                        file_name='historical_data.csv',
+                        mime='text/csv',
+                        help="Download historical data only in CSV format"
+                    )
+                
+                # Preview section
+                st.subheader("Export Preview")
+                st.dataframe(
+                    st.session_state.historical_data,
+                    use_container_width=True,
+                    height=400
+                )
+                
+                # Additional metrics preview
+                st.subheader("Summary Metrics Preview")
+                metrics_preview = calculate_metrics(st.session_state.historical_data)
+                st.json(metrics_preview)
+            else:
+                st.warning("No data available for export. Please upload data or enter manual inputs.")
 
 if __name__ == "__main__":
     main()
