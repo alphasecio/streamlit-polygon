@@ -87,16 +87,12 @@ def add_goals_tracking(df):
         st.write(f"Latest: {actual_closings:.0f} ({closings_progress:.1f}% of goal)")
 
 def plot_seasonality_analysis(df, metric):
-    if len(df) >= 24:
-        decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name="Trend"))
-        fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, name="Seasonal"))
-        fig.update_layout(title=f"Seasonality and Trend for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
-        return fig
-    else:
-        st.warning("Need at least 24 months of data for seasonality analysis.")
-        return None
+    decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name="Trend"))
+    fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, name="Seasonal"))
+    fig.update_layout(title=f"Seasonality and Trend for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
+    return fig
 
 def plot_interactive_trends(df):
     fig = px.line(df, x='month', y=['leads', 'appointments', 'closings'], title="Historical Trends")
@@ -139,28 +135,26 @@ with st.container():
         if uploaded_file is not None:
             try:
                 if uploaded_file.name.endswith('.csv'):
-                    upload_data = pd.read_csv(uploaded_file)
+                    st.session_state.historical_data = pd.read_csv(uploaded_file)
                 else:
-                    upload_data = pd.read_excel(uploaded_file)
+                    st.session_state.historical_data = pd.read_excel(uploaded_file)
 
-                upload_data['month'] = pd.to_datetime(upload_data['month'], errors='coerce')
-                upload_data.dropna(subset=['month'], inplace=True)
-                st.session_state.historical_data = upload_data
+                st.session_state.historical_data['month'] = pd.to_datetime(st.session_state.historical_data['month'], errors='coerce')
+                st.session_state.historical_data.dropna(subset=['month'], inplace=True)
                 st.write("Uploaded Data Overview:")
                 st.dataframe(st.session_state.historical_data)
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
 
         # Combine manual input with uploaded data
-        if num_leads or num_appointments or num_closings or cost:
-            new_row = pd.DataFrame({
-                'month': [pd.Timestamp('now')],
-                'leads': [num_leads],
-                'appointments': [num_appointments],
-                'closings': [num_closings],
-                'cost': [cost]
-            })
-            st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
+        new_row = pd.DataFrame({
+            'month': [pd.Timestamp('now')],
+            'leads': [num_leads],
+            'appointments': [num_appointments],
+            'closings': [num_closings],
+            'cost': [cost]
+        })
+        st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
 
         st.write("Combined Data Overview:")
         st.dataframe(st.session_state.historical_data)
@@ -168,6 +162,7 @@ with st.container():
         create_metrics_dashboard(st.session_state.historical_data)
 
     with tab2:
+        # Perform additional analysis if data is available
         if not st.session_state.historical_data.empty:
             st.sidebar.header("Analysis Filters")
             date_range = st.sidebar.date_input(
@@ -181,6 +176,8 @@ with st.container():
 
             if not filtered_data.empty:
                 add_goals_tracking(filtered_data)
+
+                # Recalculate and display metrics from filtered data
                 create_metrics_dashboard(filtered_data)
 
                 st.header("Detailed Performance Metrics")
@@ -192,9 +189,11 @@ with st.container():
 
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
-                seasonality_plot = plot_seasonality_analysis(filtered_data, metric_choice)
-                if seasonality_plot:
-                    st.plotly_chart(seasonality_plot, use_container_width=True)
+                if len(filtered_data) >= 12:
+                    fig = plot_seasonality_analysis(filtered_data, metric_choice)
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Need at least 12 months of data for seasonality analysis.")
 
                 st.header("Historical Trends")
                 plot_interactive_trends(filtered_data)
@@ -208,6 +207,9 @@ with st.container():
 
     with tab3:
         st.header("Forecast Analysis")
+        st.subheader("Model Configuration")
+        forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
+
         if not st.session_state.historical_data.empty:
             x = st.session_state.historical_data[['leads', 'appointments']]
             y = st.session_state.historical_data['closings']
