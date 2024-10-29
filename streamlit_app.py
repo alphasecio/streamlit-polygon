@@ -33,8 +33,8 @@ def calculate_metrics(df):
         'Lead to Appointment Rate': (df['appointments'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
         'Appointment to Close Rate': (df['closings'].sum() / df['appointments'].sum() * 100 if df['appointments'].sum() > 0 else 0),
         'Overall Close Rate': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
-        'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y'),
-        'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y'),
+        'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
+        'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
     }
     return metrics
 
@@ -45,7 +45,10 @@ def create_metrics_dashboard(df):
     col1, col2, col3 = st.columns(3)
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
-            st.metric(metric, f"{value:.2f}")
+            if isinstance(value, float) or isinstance(value, int):
+                st.metric(metric, f"{value:.2f}")
+            else:
+                st.metric(metric, value)
 
 def export_to_excel(df, forecasts):
     """Create and return an Excel file with data and forecasts."""
@@ -61,9 +64,11 @@ if 'historical_data' not in st.session_state:
     st.session_state.historical_data = pd.DataFrame()
 
 with st.container():
+    # Tabs for different sections
     tab1, tab2, tab3, tab4 = st.tabs(["Input & Upload", "Analysis", "Forecasting", "Export"])
 
     with tab1:
+        # Manual input section
         st.header("Input Your Data Manually")
         col1, col2 = st.columns(2)
 
@@ -76,12 +81,14 @@ with st.container():
             average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", 
                                                             min_value=0.0, 
                                                             value=10000.0)
-            cost = st.number_input("Total Cost:", min_value=0.0, value=5000.0)  # Input for cost
+            cost = st.number_input("Total Cost (Enter 0 if none):", min_value=0.0, value=0.0)  # Default to 0
 
+        # File upload section
         st.header("Upload Historical Data")
         uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"])
 
         if uploaded_file is not None:
+            # Read the uploaded file
             if uploaded_file.name.endswith('.csv'):
                 st.session_state.historical_data = pd.read_csv(uploaded_file)
             else:
@@ -98,16 +105,17 @@ with st.container():
                 'leads': [num_leads],
                 'appointments': [num_appointments],
                 'closings': [num_closings],
-                'cost': [cost]  # Add cost to new row
+                'cost': [cost]  # Include cost in the new row
             })
             st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
-        else:  # No uploaded data, create DataFrame with manual input only
+
+        else:  # No uploaded data; create DataFrame with manual input only
             st.session_state.historical_data = pd.DataFrame({
                 'month': [pd.Timestamp('now')],
                 'leads': [num_leads],
                 'appointments': [num_appointments],
                 'closings': [num_closings],
-                'cost': [cost]  # Include cost in DataFrame
+                'cost': [cost]  # Include cost in the new DataFrame
             })
 
         st.write("Combined Data Overview:")
@@ -116,6 +124,7 @@ with st.container():
         create_metrics_dashboard(st.session_state.historical_data)  # Dynamic metrics display
 
     with tab2:
+        # Perform additional analysis if data is available
         if not st.session_state.historical_data.empty:
             st.sidebar.header("Analysis Filters")
             date_range = st.sidebar.date_input(
@@ -131,8 +140,6 @@ with st.container():
             filtered_data = st.session_state.historical_data.loc[mask]
 
             add_goals_tracking(filtered_data)
-
-            # Recalculate and display metrics from filtered data
             create_metrics_dashboard(filtered_data)
 
             st.header("Detailed Performance Metrics")
@@ -203,13 +210,12 @@ with st.container():
                 'Value': [forecasted_closings, forecasted_revenue]
             }
 
-            # Create Excel file
             excel_data = export_to_excel(filtered_data, forecast_data)
 
             col1, col2 = st.columns(2)
             with col1:
                 st.download_button(label="Download Full Report (Excel)", data=excel_data, 
-                                   file_name='sales_forecast_report.xlsx',
+                                   file_name='sales_forecast_report.xlsx', 
                                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             with col2:
                 csv = st.session_state.historical_data.to_csv(index=False).encode('utf-8')
