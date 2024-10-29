@@ -357,9 +357,9 @@ def main():
                     help="Download a sample CSV file with example data"
                 )
             
-            with col2:
+                with col2:
                 # Generate and offer Excel template
-            excel_data = create_excel_template()
+                excel_data = create_excel_template()
                 st.download_button(
                     label="Download Excel Template",
                     data=excel_data,
