@@ -223,8 +223,12 @@ with st.container():
         st.write("Combined Data Overview:")
         st.dataframe(historical_data)
 
+        # ** Run performance metrics calculations dynamically**
+        metrics = calculate_metrics(historical_data)  # Always recalculate metrics based on the current data
+        create_metrics_dashboard(historical_data)  # Key metrics dashboard will be dynamically updated
+
     with tab2:
-        # Analytics section using historical data
+        # Perform additional analysis if data is available
         if not historical_data.empty:
             # Sidebar filters
             st.sidebar.header("Analysis Filters")
@@ -236,7 +240,7 @@ with st.container():
                 )
             )
 
-            # Filter data
+            # Filter data based on the selected date range
             mask = (historical_data['month'].dt.date >= date_range[0]) & \
                    (historical_data['month'].dt.date <= date_range[1])
             filtered_data = historical_data.loc[mask]
@@ -244,10 +248,10 @@ with st.container():
             # Goals tracking
             add_goals_tracking(filtered_data)
 
-            # Metrics dashboard
+            # Recalculate and display metrics from filtered data
             create_metrics_dashboard(filtered_data)
 
-            # Detailed metrics
+            # Detailed performance metrics
             st.header("Detailed Performance Metrics")
             metrics = calculate_metrics(filtered_data)
             col1, col2, col3 = st.columns(3)
