@@ -87,12 +87,16 @@ def add_goals_tracking(df):
         st.write(f"Latest: {actual_closings:.0f} ({closings_progress:.1f}% of goal)")
 
 def plot_seasonality_analysis(df, metric):
-    decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name="Trend"))
-    fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, name="Seasonal"))
-    fig.update_layout(title=f"Seasonality and Trend for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
-    return fig
+    if len(df) >= 12:
+        decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=6)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name="Trend"))
+        fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, name="Seasonal"))
+        fig.update_layout(title=f"Seasonality and Trend for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
+        return fig
+    else:
+        st.warning("Need at least 12 months of data for seasonality analysis.")
+        return None
 
 def plot_interactive_trends(df):
     fig = px.line(df, x='month', y=['leads', 'appointments', 'closings'], title="Historical Trends")
@@ -189,11 +193,9 @@ with st.container():
 
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
-                if len(filtered_data) >= 12:
-                    fig = plot_seasonality_analysis(filtered_data, metric_choice)
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning("Need at least 12 months of data for seasonality analysis.")
+                seasonality_plot = plot_seasonality_analysis(filtered_data, metric_choice)
+                if seasonality_plot is not None:
+                    st.plotly_chart(seasonality_plot, use_container_width=True)
 
                 st.header("Historical Trends")
                 plot_interactive_trends(filtered_data)
