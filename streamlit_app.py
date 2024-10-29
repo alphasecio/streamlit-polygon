@@ -63,7 +63,7 @@ PlotType = Union[Dict, go.Figure]
 def generate_sample_data() -> pd.DataFrame:
     """Generate sample data for demonstration."""
     sample_data = {
-        'month': pd.date_range(start='2023-01-01', periods=12, freq='M'),
+        'month': pd.date_range(start='2023-01-01', periods=12, freq='ME'),
         'leads': np.random.randint(80, 120, 12),
         'appointments': np.random.randint(40, 60, 12),
         'closings': np.random.randint(20, 30, 12),
