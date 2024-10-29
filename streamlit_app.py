@@ -141,32 +141,145 @@ def add_goals_tracking(df: DataFrameType) -> None:
         st.write(f"Latest: {actual_closings:.0f} ({closings_progress:.1f}% of goal)")
 
 def plot_seasonality_analysis(df: DataFrameType, metric: str) -> Optional[PlotType]:
-    """Plot seasonal decomposition analysis."""
+    """Plot seasonal decomposition analysis with error handling."""
     if len(df) < 24:
         st.warning("Insufficient data for reliable seasonal decomposition (need 24+ months).")
         return None
 
     try:
-        decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
-        fig = go.Figure()
+        # Ensure data is properly sorted and indexed
+        df_sorted = df.sort_values('month').copy()
+        df_sorted.set_index('month', inplace=True)
         
-        # Add components with custom styling
-        fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, 
-                               name="Trend", line=dict(color='#2196F3', width=2)))
-        fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, 
-                               name="Seasonal", line=dict(color='#4CAF50', width=2)))
+        # Perform decomposition
+        decomposed = seasonal_decompose(df_sorted[metric], model='additive', period=12)
         
-        fig.update_layout(
-            title=f"Seasonality and Trend Analysis for {metric.capitalize()}",
-            xaxis_title="Date",
-            yaxis_title=metric.capitalize(),
-            template="plotly_white",
-            height=500
-        )
-        return fig
+        # Create figure dictionary (Plotly expects dict format)
+        fig_dict = {
+            'data': [
+                {
+                    'type': 'scatter',
+                    'x': decomposed.trend.index,
+                    'y': decomposed.trend,
+                    'name': 'Trend',
+                    'line': {'color': '#2196F3', 'width': 2}
+                },
+                {
+                    'type': 'scatter',
+                    'x': decomposed.seasonal.index,
+                    'y': decomposed.seasonal,
+                    'name': 'Seasonal',
+                    'line': {'color': '#4CAF50', 'width': 2}
+                }
+            ],
+            'layout': {
+                'title': f"Seasonality and Trend Analysis for {metric.capitalize()}",
+                'xaxis': {'title': 'Date'},
+                'yaxis': {'title': metric.capitalize()},
+                'template': 'plotly_white',
+                'height': 500
+            }
+        }
+        return fig_dict
     except Exception as e:
         st.error(f"Error in seasonal decomposition: {str(e)}")
         return None
+
+def train_forecast_model(df: DataFrameType) -> Tuple[Optional[ModelType], Dict[str, float]]:
+    """Train forecasting model with proper feature names."""
+    if len(df) < 2:
+        return None, {'error': 'Insufficient data for modeling'}
+    
+    try:
+        # Create feature matrix with proper column names
+        X = pd.DataFrame({
+            'leads': df['leads'],
+            'appointments': df['appointments']
+        })
+        y = df['closings']
+        
+        # Initialize and train model
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        # Calculate performance metrics
+        y_pred = model.predict(X)
+        metrics = {
+            'mae': mean_absolute_error(y, y_pred),
+            'rmse': np.sqrt(mean_squared_error(y, y_pred)),
+            'r2': model.score(X, y) if len(df) > 2 else np.nan
+        }
+        
+        return model, metrics
+    except Exception as e:
+        st.error(f"Error training model: {str(e)}")
+        return None, {'error': str(e)}
+
+def predict_closings(model: Optional[ModelType], 
+                    leads: float, 
+                    appointments: float) -> Tuple[float, str]:
+    """Make predictions with proper feature format."""
+    if model is None:
+        return 0.0, "No model available"
+    
+    try:
+        # Create properly formatted input DataFrame
+        input_data = pd.DataFrame({
+            'leads': [leads],
+            'appointments': [appointments]
+        })
+        
+        # Make prediction
+        prediction = model.predict(input_data)[0]
+        return max(0.0, prediction), "Success"
+    except Exception as e:
+        return 0.0, str(e)
+
+# Update the tab3 (Forecasting) section to use these functions:
+with tab3:
+    st.header("Forecast Analysis")
+    st.subheader("Model Configuration")
+    forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
+
+    if not st.session_state.historical_data.empty:
+        # Train model
+        model, model_metrics = train_forecast_model(st.session_state.historical_data)
+        
+        if model is not None:
+            # Make prediction
+            forecasted_closings, prediction_status = predict_closings(
+                model, num_leads, num_appointments)
+            
+            if prediction_status == "Success":
+                forecasted_revenue = forecasted_closings * average_revenue_per_closing
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
+                with col2:
+                    st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
+
+                # Display model metrics
+                st.subheader("Model Performance Metrics")
+                col1, col2, col3 = st.columns(3)
+                
+                col1.metric("Mean Absolute Error", 
+                          f"{model_metrics['mae']:.2f}")
+                col2.metric("Root Mean Square Error", 
+                          f"{model_metrics['rmse']:.2f}")
+                
+                if not np.isnan(model_metrics['r2']):
+                    r2_value = model_metrics['r2']
+                    col3.metric("R² Score", f"{r2_value:.2f}")
+                    
+                    if r2_value < 0.5:
+                        st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+                else:
+                    st.info("R² score requires more than two samples for calculation.")
+            else:
+                st.error(f"Prediction error: {prediction_status}")
+    else:
+        st.warning("No data available for forecasting. Please upload data or enter manual inputs.")
 
 def plot_interactive_trends(df: DataFrameType) -> None:
     """Plot interactive historical trends."""
