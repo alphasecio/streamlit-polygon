@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.impute import SimpleImputer  # Importing SimpleImputer
+from sklearn.impute import SimpleImputer
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -15,12 +15,15 @@ num_leads = st.number_input("Number of Leads:", min_value=0)
 num_appointments = st.number_input("Number of Appointments:", min_value=0)
 num_closings = st.number_input("Number of Closings:", min_value=0)
 
+# Define average revenue per closing (you can set this to your expected value)
+average_revenue_per_closing = st.number_input("Average Revenue per Closing ($):", min_value=0.0, value=10000.0)
+
 # Create a CSV file with headers and sample data for download
 sample_data = {
     'month': ['2023-01-01', '2023-02-01', '2023-03-01'],
     'leads': [0, 0, 0],
     'appointments': [0, 0, 0],
-    'closings': [0, 0, 0]
+    'closings': [10000, 20000, 30000]  # Sample dollar amounts for closings
 }
 
 # Create a DataFrame
@@ -40,7 +43,7 @@ st.download_button(
 # Prompt for CSV file structure
 st.info("Please upload a CSV file with the following columns: 'month', 'leads', 'appointments', 'closings'.")
 st.write("**Example CSV Format:**")
-st.write("```\nmonth,leads,appointments,closings\n2023-01-01,0,0,0\n2023-02-01,0,0,0\n```")
+st.write("```\nmonth,leads,appointments,closings\n2023-01-01,0,0,10000\n2023-02-01,0,0,20000\n```")
 
 uploaded_file = st.file_uploader("Upload Your Updated CSV File", type=["csv"])
 
@@ -76,9 +79,12 @@ if uploaded_file is not None:
                 input_data = np.array([[num_leads, num_appointments]]).reshape(1, -1)
                 forecasted_closings = model.predict(input_data)[0]
 
+                # Calculate forecasted revenue based on closings
+                forecasted_revenue = forecasted_closings * average_revenue_per_closing 
+
                 # Button to calculate forecast
                 if st.button("Forecast"):
-                    st.success(f"Forecasted Closings: {forecasted_closings}")
+                    st.success(f"Forecasted Revenue from Closings: ${forecasted_revenue:.2f}")
 
                     # Visualizing the data
                     st.header("Forecast Visualization")
@@ -106,9 +112,9 @@ if uploaded_file is not None:
                     st.header("Data Overview")
                     st.dataframe(historical_data)
 
-                    # Displaying forecasted closings in context
-                    st.write("**Forecasted Closings Based on User Input:**")
-                    st.write(f"Forecasted Closings: ${forecasted_closings:.2f}")
+                    # Displaying forecasted revenue in context
+                    st.write("**Forecasted Revenue Based on User Input:**")
+                    st.write(f"Forecasted Revenue: ${forecasted_revenue:.2f}")
 
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
