@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from sklearn.impute import SimpleImputer  # Importing SimpleImputer
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Title of the app
 st.title("Lead, Appointment, and Closing Stats Forecaster")
 
-# Input section for user manual input (optional, you can choose to remove this later)
+# Input section for user manual input (optional)
 st.header("Input Your Data Manually (Optional)")
 num_leads = st.number_input("Number of Leads:", min_value=0)
 num_appointments = st.number_input("Number of Appointments:", min_value=0)
@@ -57,6 +58,10 @@ if uploaded_file is not None:
             if (historical_data[['leads', 'appointments', 'closings']] < 0).any().any():
                 st.error("Values in 'leads', 'appointments', and 'closings' must be non-negative.")
             else:
+                # Handle missing values using SimpleImputer
+                imputer = SimpleImputer(strategy='mean')
+                historical_data[['leads', 'appointments']] = imputer.fit_transform(historical_data[['leads', 'appointments']])
+
                 # Proceed with the analysis if data is valid
                 historical_data['month'] = pd.to_datetime(historical_data['month'])  # Ensure month is in datetime format
                 historical_data.sort_values('month', inplace=True)  # Sort by month
@@ -67,7 +72,7 @@ if uploaded_file is not None:
                 model = LinearRegression()
                 model.fit(X, y)
 
-                # Make a forecast based on the user input or the last row of the uploaded data
+                # Make a forecast based on the user input
                 input_data = np.array([[num_leads, num_appointments]]).reshape(1, -1)
                 forecasted_closings = model.predict(input_data)[0]
 
