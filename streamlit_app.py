@@ -6,7 +6,6 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.seasonal import seasonal_decompose
 import plotly.express as px
 import plotly.graph_objects as go
-import calendar
 import io
 
 # Set page layout
@@ -38,8 +37,8 @@ def calculate_metrics(df):
             'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
             'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
         }
-        # Handle NaN in metrics by replacing them with 0 or 'N/A'
-        metrics = {k: (v if pd.notna(v) else 'N/A') for k, v in metrics.items()}
+        # Ensure all metrics are valid numbers or set to "N/A"
+        metrics = {k: (v if pd.notna(v) and isinstance(v, (int, float)) else 'N/A') for k, v in metrics.items()}
         return metrics
     except Exception as e:
         st.error(f"Error calculating metrics: {str(e)}")
@@ -90,7 +89,7 @@ def create_metrics_dashboard(df):
 
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
-            if isinstance(value, (float, int)):
+            if isinstance(value, (float, int)) and pd.notna(value):
                 if "rate" in metric:
                     formatted_value = f"{value:.1f}%"
                 elif "cost per" in metric:
@@ -98,7 +97,7 @@ def create_metrics_dashboard(df):
                 else:
                     formatted_value = f"{value:,.0f}"
             else:
-                formatted_value = value  
+                formatted_value = "N/A"  # Display "N/A" if value is not numeric
             st.metric(metric, formatted_value)
 
 # Primary app logic
@@ -200,7 +199,7 @@ with st.container():
                 col1, col2, col3 = st.columns(3)
                 for i, (metric, value) in enumerate(metrics.items()):
                     with [col1, col2, col3][i % 3]:
-                        st.metric(metric, f"{value:.2f}")
+                        st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) and pd.notna(value) else "N/A")
 
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
