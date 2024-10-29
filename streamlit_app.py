@@ -4,15 +4,11 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.impute import SimpleImputer
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import io
-import base64
 from statsmodels.tsa.seasonal import seasonal_decompose
 import calendar
+import io
 
 # Add this at the top of your script for consistent styling
 st.set_page_config(layout="wide")
@@ -56,13 +52,10 @@ def export_to_excel(df, forecasts):
 
 def plot_seasonality_analysis(df, metric):
     """Create seasonal decomposition plot."""
-    # Ensure data is sorted and indexed by date
     df_sorted = df.sort_values('month').set_index('month')
 
-    # Perform seasonal decomposition
     decomposition = seasonal_decompose(df_sorted[metric], period=12, model='additive')
 
-    # Create subplot figure
     fig = go.Figure()
 
     # Original data
@@ -166,74 +159,73 @@ def plot_conversion_funnel(df):
     fig = px.funnel(funnel_df, x='Count', y='Stage', title='Conversion Funnel', labels={'x': 'Count'})
     st.plotly_chart(fig, use_container_width=True)
 
-# Title and description
-st.title("Lead, Appointment, and Closing Stats Forecaster")
-st.write("Advanced analytics and forecasting tool for sales pipeline management")
+# Primary app logic
+with st.container():
+    # Tabs for different sections
+    tab1, tab2, tab3, tab4 = st.tabs(["Input & Upload", "Analysis", "Forecasting", "Export"])
 
-# Create tabs for different sections
-tab1, tab2, tab3, tab4 = st.tabs(["Input & Upload", "Analysis", "Forecasting", "Export"])
+    with tab1:
+        # Manual input section
+        st.header("Input Your Data Manually")
+        col1, col2 = st.columns(2)
 
-with tab1:
-    # Input section for user manual input
-    st.header("Input Your Data Manually")
-    col1, col2 = st.columns(2)
-    with col1:
-        num_leads = st.number_input("Number of Leads:", min_value=0, value=100)
-        num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50)
-    with col2:
-        num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
-        average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", 
-                                                    min_value=0.0, 
-                                                    value=10000.0)
+        with col1:
+            num_leads = st.number_input("Number of Leads:", min_value=0, value=100)
+            num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50)
 
-    # File upload section
-    st.header("Upload Historical Data")
+        with col2:
+            num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
+            average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", 
+                                                            min_value=0.0, 
+                                                            value=10000.0)
 
-    # Create sample data
-    sample_data = {
-        'month': pd.date_range(start='2023-01-01', periods=12, freq='m'),  # Ensure proper datetime object
-        'leads': np.random.randint(80, 120, 12),
-        'appointments': np.random.randint(40, 60, 12),
-        'closings': np.random.randint(20, 30, 12)
-    }
-    sample_df = pd.DataFrame(sample_data)
+        # File upload section
+        st.header("Upload Historical Data")
+        uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"])
 
-    # Download buttons
-    col1, col2 = st.columns(2)
-    with col1:
-        csv_file = sample_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Example CSV",
-            data=csv_file,
-            file_name='example_data.csv',
-            mime='text/csv',
-        )
-    with col2:
-        # Create Excel template
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            sample_df.to_excel(writer, index=False)
-        excel_data = output.getvalue()
-        st.download_button(
-            label="Download Excel Template",
-            data=excel_data,
-            file_name='template.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
+        # Initialize an empty DataFrame for uploaded data
+        historical_data = pd.DataFrame()
 
-    uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"])
+        if uploaded_file is not None:
+            # Read the uploaded file
+            if uploaded_file.name.endswith('.csv'):
+                historical_data = pd.read_csv(uploaded_file)
+            else:
+                historical_data = pd.read_excel(uploaded_file)
 
-if uploaded_file is not None:
-    try:
-        # Read the uploaded file
-        if uploaded_file.name.endswith('.csv'):
-            historical_data = pd.read_csv(uploaded_file)
-        else:
-            historical_data = pd.read_excel(uploaded_file)
+            historical_data['month'] = pd.to_datetime(historical_data['month'])
 
-        historical_data['month'] = pd.to_datetime(historical_data['month'])
+            # Display the uploaded data
+            st.write("Uploaded Data Overview:")
+            st.dataframe(historical_data)
 
-        with tab2:
+        # Combine manual input with uploaded data
+        if not historical_data.empty:  # If there is uploaded data
+            # Create a new row with the manual input data
+            new_row = pd.DataFrame({
+                'month': [pd.Timestamp('now')],
+                'leads': [num_leads],
+                'appointments': [num_appointments],
+                'closings': [num_closings]
+            })
+            # Append the manual input data to the historical data DataFrame
+            historical_data = pd.concat([historical_data, new_row], ignore_index=True)
+
+        else:  # No uploaded data, create a DataFrame with manual input only
+            historical_data = pd.DataFrame({
+                'month': [pd.Timestamp('now')],
+                'leads': [num_leads],
+                'appointments': [num_appointments],
+                'closings': [num_closings]
+            })
+
+        # Display the combined data overview
+        st.write("Combined Data Overview:")
+        st.dataframe(historical_data)
+
+    with tab2:
+        # Analytics section using historical data
+        if not historical_data.empty:
             # Sidebar filters
             st.sidebar.header("Analysis Filters")
             date_range = st.sidebar.date_input(
@@ -285,18 +277,21 @@ if uploaded_file is not None:
             # Conversion funnel
             st.header("Conversion Funnel")
             plot_conversion_funnel(filtered_data)
+        else:
+            st.warning("No data available for analysis. Please upload data or enter manual inputs.")
 
-        with tab3:
-            # Forecast section
-            st.header("Forecast Analysis")
+    with tab3:
+        # Forecast section
+        st.header("Forecast Analysis")
 
-            # Model settings
-            st.subheader("Model Configuration")
-            forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
+        # Model settings
+        st.subheader("Model Configuration")
+        forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
 
+        if not historical_data.empty:
             # Fit model and make predictions
-            x = filtered_data[['leads', 'appointments']]
-            y = filtered_data['closings']
+            x = historical_data[['leads', 'appointments']]
+            y = historical_data['closings']
             model = LinearRegression()
             model.fit(x, y)
 
@@ -334,12 +329,15 @@ if uploaded_file is not None:
 
             if r2 < 0.5:
                 st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+        else:
+            st.warning("No data available for forecasting. Please upload data or enter manual inputs.")
 
-        with tab4:
-            # Export section
-            st.header("Export Data")
+    with tab4:
+        # Export section
+        st.header("Export Data")
 
-            # Prepare forecast data for export
+        # Prepare forecast data for export
+        if not historical_data.empty:
             forecast_data = {
                 'Metric': ['Forecasted Closings', 'Forecasted Revenue'],
                 'Value': [forecasted_closings, forecasted_revenue]
@@ -360,7 +358,7 @@ if uploaded_file is not None:
 
             with col2:
                 # CSV export
-                csv = filtered_data.to_csv(index=False).encode('utf-8')
+                csv = historical_data.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="Download Historical Data (CSV)",
                     data=csv,
@@ -371,7 +369,5 @@ if uploaded_file is not None:
             # Display export preview
             st.subheader("Export Preview")
             st.dataframe(filtered_data)
-
-    except Exception as e:
-        st.error(f"Error processing data: {str(e)}")
-        st.write("Please ensure your file is properly formatted and try again.")
+        else:
+            st.warning("No data available for export. Please upload data or enter manual inputs.")
