@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression  # Corrected name
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.seasonal import seasonal_decompose
 import plotly.express as px
@@ -18,7 +18,7 @@ st.markdown("""
     .stmetric .stmetricvalue {font-size: 24px !important;}
     .stmetric .stmetricdelta {font-size: 12px !important;}
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 def calculate_metrics(df):
     """Calculate business metrics including cost metrics."""
@@ -30,13 +30,13 @@ def calculate_metrics(df):
             'Cost per Lead': (df['cost'].sum() / df['leads'].sum() if df['leads'].sum() > 0 else 0),
             'Cost per Appointment': (df['cost'].sum() / df['appointments'].sum() if df['appointments'].sum() > 0 else 0),
             'Cost per Closing': (df['cost'].sum() / df['closings'].sum() if df['closings'].sum() > 0 else 0),
-            'Lead to Appointment Rate': (df['appointments'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
-            'Appointment to Close Rate': (df['closings'].sum() / df['appointments'].sum() * 100 if df['appointments'].sum() > 0 else 0),
-            'Overall Close Rate': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
-            'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
-            'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
+            'Lead to Appointment Rate (%)': (df['appointments'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
+            'Appointment to Close Rate (%)': (df['closings'].sum() / df['appointments'].sum() * 100 if df['appointments'].sum() > 0 else 0),
+            'Overall Close Rate (%)': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
+            'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y') if df['closings'].any() else 'n/a',
+            'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y') if df['closings'].any() else 'n/a',
         }
-        return {k: (v if pd.notna(v) and isinstance(v, (int, float)) else 'N/A') for k, v in metrics.items()}
+        return {k: (v if pd.notna(v) and isinstance(v, (int, float)) else 'n/a') for k, v in metrics.items()}
     except Exception as e:
         st.error(f"Error calculating metrics: {str(e)}")
         return {}
@@ -49,15 +49,15 @@ def create_metrics_dashboard(df):
 
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
-            formatted_value = f"{value:.1f}%" if "rate" in metric else f"${value:.2f}" if "cost per" in metric else f"{value:,.0f}" if isinstance(value, (float, int)) else value
+            formatted_value = f"{value:.1f}%" if "rate" in metric else f"${value:,.2f}" if "cost per" in metric else f"{value:,.0f}" if isinstance(value, (float, int)) else value
             st.metric(metric, formatted_value)
 
 def export_to_excel(df, forecasts):
     """Create and return an Excel file with data and forecasts."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name='historical data', index=False)
-        pd.DataFrame(forecasts).to_excel(writer, sheet_name='forecasts', index=False)
+        df.to_excel(writer, sheet_name='Historical Data', index=False)
+        pd.DataFrame(forecasts).to_excel(writer, sheet_name='Forecasts', index=False)
     return output.getvalue()
 
 def add_goals_tracking(df):
@@ -100,11 +100,13 @@ def plot_seasonality_analysis(df, metric):
     return fig
 
 def plot_interactive_trends(df):
+    """Plot interactive historical trends."""
     fig = px.line(df, x='month', y=['leads', 'appointments', 'closings'], title="Historical Trends")
     fig.update_layout(xaxis_title="Month", yaxis_title="Values")
     st.plotly_chart(fig, use_container_width=True)
 
 def plot_conversion_funnel(df):
+    """Plot conversion funnel."""
     labels = ['Leads', 'Appointments', 'Closings']
     values = [df['leads'].sum(), df['appointments'].sum(), df['closings'].sum()]
     fig = go.Figure(go.Funnel(y=labels, x=values))
@@ -130,8 +132,8 @@ with st.container():
 
         with col2:
             num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
-            average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", min_value=0.0, value=10000.0)
-            cost = st.number_input("Total Cost (Enter 0 if none):", min_value=0.0, value=0.0)
+            average_revenue_per_closing = st.number_input("Average Revenue per Closing ($):", min_value=0.0, value=10000.0)
+            cost = st.number_input("Total Cost (Enter 0 if None):", min_value=0.0, value=0.0)
 
         # File upload section
         st.header("Upload Historical Data")
@@ -190,7 +192,7 @@ with st.container():
                 col1, col2, col3 = st.columns(3)
                 for i, (metric, value) in enumerate(metrics.items()):
                     with [col1, col2, col3][i % 3]:
-                        st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) else "N/A")
+                        st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) else "n/a")
 
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
