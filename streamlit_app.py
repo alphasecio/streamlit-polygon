@@ -23,29 +23,46 @@ st.markdown("""
 
 def calculate_metrics(df):
     """Calculate business metrics including cost metrics."""
-    metrics = {
-        'Total Leads': df['leads'].sum(),
-        'Total Appointments': df['appointments'].sum(),
-        'Total Closings': df['closings'].sum(),
-        'Cost per Lead': (df['cost'].sum() / df['leads'].sum() if df['leads'].sum() > 0 else 0),
-        'Cost per Appointment': (df['cost'].sum() / df['appointments'].sum() if df['appointments'].sum() > 0 else 0),
-        'Cost per Closing': (df['cost'].sum() / df['closings'].sum() if df['closings'].sum() > 0 else 0),
-        'Lead to Appointment Rate': (df['appointments'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
-        'Appointment to Close Rate': (df['closings'].sum() / df['appointments'].sum() * 100 if df['appointments'].sum() > 0 else 0),
-        'Overall Close Rate': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
-        'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
-        'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
-    }
-    return metrics
+    try:
+        metrics = {
+            'Total Leads': df['leads'].sum(),
+            'Total Appointments': df['appointments'].sum(),
+            'Total Closings': df['closings'].sum(),
+            'Cost per Lead': (df['cost'].sum() / df['leads'].sum() if df['leads'].sum() > 0 else 0),
+            'Cost per Appointment': (df['cost'].sum() / df['appointments'].sum() if df['appointments'].sum() > 0 else 0),
+            'Cost per Closing': (df['cost'].sum() / df['closings'].sum() if df['closings'].sum() > 0 else 0),
+            'Lead to Appointment Rate': (df['appointments'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
+            'Appointment to Close Rate': (df['closings'].sum() / df['appointments'].sum() * 100 if df['appointments'].sum() > 0 else 0),
+            'Overall Close Rate': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
+            'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
+            'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y') if df['closings'].any() else 'N/A',
+        }
+        return metrics
+    except Exception as e:
+        st.error(f"Error calculating metrics: {str(e)}")
+        return {}
 
 def create_metrics_dashboard(df):
     """Create metrics dashboard for display."""
     st.header("Key Metrics Dashboard")
     metrics = calculate_metrics(df)
     col1, col2, col3 = st.columns(3)
+
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
-            st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) else value)
+            if isinstance(value, (float, int)):
+                # Format percentages and currency differently from regular numbers
+                if "rate" in metric:
+                    formatted_value = f"{value:.1f}%"
+                elif "cost per" in metric:
+                    formatted_value = f"${value:.2f}"
+                else:
+                    formatted_value = f"{value:,.0f}"
+            else:
+                # For non-numeric values (like dates or 'N/A')
+                formatted_value = value
+
+            st.metric(metric, formatted_value)
 
 def export_to_excel(df, forecasts):
     """Create and return an Excel file with data and forecasts."""
@@ -162,14 +179,11 @@ with st.container():
                    (st.session_state.historical_data['month'].dt.date <= date_range[1])
             filtered_data = st.session_state.historical_data.loc[mask]
 
-            # Only call add_goals_tracking if there is data
             if not filtered_data.empty:
-                add_goals_tracking(filtered_data)
+                add_goals_tracking(filtered_data)  # Call this after filtering
 
-                # Recalculate and display metrics from filtered data
                 create_metrics_dashboard(filtered_data)
 
-                # Detailed performance metrics
                 st.header("Detailed Performance Metrics")
                 metrics = calculate_metrics(filtered_data)
                 col1, col2, col3 = st.columns(3)
@@ -177,7 +191,6 @@ with st.container():
                     with [col1, col2, col3][i % 3]:
                         st.metric(metric, f"{value:.2f}")
 
-                # Seasonality analysis
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
                 if len(filtered_data) >= 12:
@@ -186,11 +199,9 @@ with st.container():
                 else:
                     st.warning("Need at least 12 months of data for seasonality analysis.")
 
-                # Historical trends
                 st.header("Historical Trends")
                 plot_interactive_trends(filtered_data)
 
-                # Conversion funnel
                 st.header("Conversion Funnel")
                 plot_conversion_funnel(filtered_data)
             else:
