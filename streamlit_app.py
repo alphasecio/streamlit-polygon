@@ -87,6 +87,11 @@ def add_goals_tracking(df):
         st.write(f"Latest: {actual_closings:.0f} ({closings_progress:.1f}% of goal)")
 
 def plot_seasonality_analysis(df, metric):
+    """Plot the seasonal decomposition analysis."""
+    if len(df) < 24:  # Check if we have less than 24 observations
+        st.warning("Not enough data for seasonal decomposition. Please provide at least 24 observations.")
+        return None  # Exit the function if there isn't enough data
+
     decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name="Trend"))
