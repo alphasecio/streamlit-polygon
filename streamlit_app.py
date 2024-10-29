@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
+# Helper functions for visualization
 def create_metrics_dashboard(df):
     """Create a metrics dashboard with key KPIs"""
     col1, col2, col3, col4 = st.columns(4)
@@ -49,16 +50,13 @@ def create_metrics_dashboard(df):
 
 def plot_interactive_trends(df):
     """Create interactive trend visualization with Plotly"""
-    # Let user select metrics to display
     metrics = st.multiselect(
         "Select metrics to display:",
         options=['leads', 'appointments', 'closings'],
         default=['leads', 'appointments', 'closings']
     )
     
-    # Create figure
     fig = go.Figure()
-    
     colors = {'leads': '#1f77b4', 'appointments': '#ff7f0e', 'closings': '#2ca02c'}
     
     for metric in metrics:
@@ -78,13 +76,7 @@ def plot_interactive_trends(df):
         title="Historical Trends",
         xaxis_title="Month",
         yaxis_title="Count",
-        hovermode='x unified',
-        legend=dict(
-            yanchor="top",
-            y=0.99,
-            xanchor="left",
-            x=0.01
-        )
+        hovermode='x unified'
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -101,76 +93,53 @@ def plot_conversion_funnel(df):
         textposition="inside",
         textinfo="value+percent initial",
         opacity=0.65,
-        marker=dict(color=["#1f77b4", "#ff7f0e", "#2ca02c"]),
-        connector=dict(line=dict(color="royalblue", dash="dot", width=3))
+        marker=dict(color=["#1f77b4", "#ff7f0e", "#2ca02c"])
     ))
     
     fig.update_layout(title="Conversion Funnel")
     st.plotly_chart(fig, use_container_width=True)
 
-def plot_heatmap(df):
-    """Create a heatmap of monthly patterns"""
-    df['year'] = df['month'].dt.year
-    df['month_name'] = df['month'].dt.strftime('%B')
-    
-    metrics = st.selectbox(
-        "Select metric for heatmap:",
-        options=['leads', 'appointments', 'closings']
-    )
-    
-    pivot_table = df.pivot_table(
-        values=metrics,
-        index='year',
-        columns='month_name',
-        aggfunc='mean'
-    )
-    
-    fig = px.imshow(
-        pivot_table,
-        color_continuous_scale='YlOrRd',
-        title=f'Monthly {metrics.capitalize()} Patterns'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def plot_forecast_comparison(actual_data, forecasted_values):
-    """Create an interactive forecast comparison visualization"""
-    fig = go.Figure()
-    
-    # Actual values
-    fig.add_trace(go.Bar(
-        name='Actual',
-        x=['Leads', 'Appointments', 'Closings'],
-        y=[actual_data['leads'].iloc[-1], 
-           actual_data['appointments'].iloc[-1], 
-           actual_data['closings'].iloc[-1]],
-        marker_color='#1f77b4'
-    ))
-    
-    # Forecasted values
-    fig.add_trace(go.Bar(
-        name='Forecast',
-        x=['Leads', 'Appointments', 'Closings'],
-        y=[forecasted_values['leads'],
-           forecasted_values['appointments'],
-           forecasted_values['closings']],
-        marker_color='#2ca02c'
-    ))
-    
-    fig.update_layout(
-        title="Actual vs Forecast Comparison",
-        barmode='group'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-# Main app code
+# Title of the app
 st.title("Lead, Appointment, and Closing Stats Forecaster")
 
-# [Previous input section code remains the same until file processing]
+# Input section for user manual input
+st.header("Input Your Data Manually")
+num_leads = st.number_input("Number of Leads:", min_value=0, value=100)
+num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50)
+num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
+average_revenue_per_closing = st.number_input("Average Revenue Per Closing ($):", 
+                                            min_value=0.0, 
+                                            value=10000.0)
+
+# Create sample data
+sample_data = {
+    'month': ['2023-01-01', '2023-02-01', '2023-03-01'],
+    'leads': [100, 120, 110],
+    'appointments': [50, 60, 55],
+    'closings': [25, 30, 28]
+}
+sample_df = pd.DataFrame(sample_data)
+csv_file = sample_df.to_csv(index=False).encode('utf-8')
+
+# Download button for sample data
+st.download_button(
+    label="Download Example CSV",
+    data=csv_file,
+    file_name='example_data.csv',
+    mime='text/csv',
+)
+
+# File upload section
+st.header("Upload Historical Data")
+st.info("Please upload a CSV file with the following columns: 'month', 'leads', 'appointments', 'closings'")
+st.write("**Example CSV Format:**")
+st.write(sample_df)
+
+uploaded_file = st.file_uploader("Upload Your CSV File", type=["csv"])
 
 if uploaded_file is not None:
     try:
+        # Read and process the data
         historical_data = pd.read_csv(uploaded_file)
         historical_data['month'] = pd.to_datetime(historical_data['month'])
         
@@ -205,10 +174,6 @@ if uploaded_file is not None:
         st.header("Conversion Funnel")
         plot_conversion_funnel(filtered_data)
         
-        # Monthly patterns heatmap
-        st.header("Monthly Patterns")
-        plot_heatmap(filtered_data)
-        
         # Forecast section
         st.header("Forecast Analysis")
         
@@ -236,14 +201,6 @@ if uploaded_file is not None:
                 f"${forecasted_revenue:,.2f}",
                 f"${forecasted_revenue - (filtered_data['closings'].mean() * average_revenue_per_closing):,.2f}"
             )
-        
-        # Compare forecast with actual
-        forecast_data = {
-            'leads': num_leads,
-            'appointments': num_appointments,
-            'closings': forecasted_closings
-        }
-        plot_forecast_comparison(filtered_data, forecast_data)
         
         # Model quality metrics
         with st.expander("Model Quality Metrics"):
