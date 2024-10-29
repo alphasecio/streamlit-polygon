@@ -45,10 +45,7 @@ def create_metrics_dashboard(df):
     col1, col2, col3 = st.columns(3)
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
-            if isinstance(value, float) or isinstance(value, int):
-                st.metric(metric, f"{value:.2f}")
-            else:
-                st.metric(metric, value)
+            st.metric(metric, f"{value:.2f}" if isinstance(value, (float, int)) else value)
 
 def export_to_excel(df, forecasts):
     """Create and return an Excel file with data and forecasts."""
@@ -88,7 +85,6 @@ with st.container():
         uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"])
 
         if uploaded_file is not None:
-            # Read the uploaded file
             if uploaded_file.name.endswith('.csv'):
                 st.session_state.historical_data = pd.read_csv(uploaded_file)
             else:
@@ -139,29 +135,35 @@ with st.container():
                    (st.session_state.historical_data['month'].dt.date <= date_range[1])
             filtered_data = st.session_state.historical_data.loc[mask]
 
-            add_goals_tracking(filtered_data)
-            create_metrics_dashboard(filtered_data)
+            # Only call add_goals_tracking if there is data
+            if not filtered_data.empty:
+                add_goals_tracking(filtered_data)
 
-            st.header("Detailed Performance Metrics")
-            metrics = calculate_metrics(filtered_data)
-            col1, col2, col3 = st.columns(3)
-            for i, (metric, value) in enumerate(metrics.items()):
-                with [col1, col2, col3][i % 3]:
-                    st.metric(metric, f"{value:.2f}")
+                # Recalculate and display metrics from filtered data
+                create_metrics_dashboard(filtered_data)
 
-            st.header("Seasonality Analysis")
-            metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
-            if len(filtered_data) >= 12:
-                fig = plot_seasonality_analysis(filtered_data, metric_choice)
-                st.plotly_chart(fig, use_container_width=True)
+                st.header("Detailed Performance Metrics")
+                metrics = calculate_metrics(filtered_data)
+                col1, col2, col3 = st.columns(3)
+                for i, (metric, value) in enumerate(metrics.items()):
+                    with [col1, col2, col3][i % 3]:
+                        st.metric(metric, f"{value:.2f}")
+
+                st.header("Seasonality Analysis")
+                metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
+                if len(filtered_data) >= 12:
+                    fig = plot_seasonality_analysis(filtered_data, metric_choice)
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Need at least 12 months of data for seasonality analysis.")
+
+                st.header("Historical Trends")
+                plot_interactive_trends(filtered_data)
+
+                st.header("Conversion Funnel")
+                plot_conversion_funnel(filtered_data)
             else:
-                st.warning("Need at least 12 months of data for seasonality analysis.")
-
-            st.header("Historical Trends")
-            plot_interactive_trends(filtered_data)
-
-            st.header("Conversion Funnel")
-            plot_conversion_funnel(filtered_data)
+                st.warning("No data available for this date range.")
         else:
             st.warning("No data available for analysis. Please upload data or enter manual inputs.")
 
@@ -210,6 +212,7 @@ with st.container():
                 'Value': [forecasted_closings, forecasted_revenue]
             }
 
+            # Create Excel file
             excel_data = export_to_excel(filtered_data, forecast_data)
 
             col1, col2 = st.columns(2)
