@@ -144,14 +144,14 @@ def add_goals_tracking(df: DataFrameType) -> None:
         st.write(f"Latest: {actual_leads:.0f} ({leads_progress:.1f}% of goal)")
 
     with col2:
-        appointment_goal = st.number_input("Monthly Appointments Goal:", min_value=0, value=50)
+        appointment_goal = st.number_input("Monthly Appointments Goal:", min_value=0, value=10)
         actual_appointments = df['appointments'].iloc[-1] if not df.empty else 0
         appointments_progress = calculate_progress(actual_appointments, appointment_goal)
         st.progress(min(appointments_progress / 100, 1.0))
         st.write(f"Latest: {actual_appointments:.0f} ({appointments_progress:.1f}% of goal)")
 
     with col3:
-        closing_goal = st.number_input("Monthly Closings Goal:", min_value=0, value=25)
+        closing_goal = st.number_input("Monthly Closings Goal:", min_value=0, value=2)
         actual_closings = df['closings'].iloc[-1] if not df.empty else 0
         closings_progress = calculate_progress(actual_closings, closing_goal)
         st.progress(min(closings_progress / 100, 1.0))
@@ -267,13 +267,13 @@ def main():
             
             with col1:
                 num_leads = st.number_input("Number of Leads:", min_value=0, value=100)
-                num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50)
+                num_appointments = st.number_input("Number of Appointments:", min_value=0, value=10)
 
             with col2:
-                num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
+                num_closings = st.number_input("Number of Closings:", min_value=0, value=1)
                 average_revenue_per_closing = st.number_input("Average Revenue per Closing ($):", 
-                                                            min_value=0.0, value=10000.0)
-                cost = st.number_input("Total Cost ($):", min_value=0.0, value=0.0)
+                                                            min_value=0.0, value=795.0)
+                cost = st.number_input("Total Cost ($):", min_value=0.0, value=600)
 
             st.header("Upload Historical Data")
             
