@@ -7,7 +7,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 import plotly.express as px
 import plotly.graph_objects as go
 import io
-from typing import Dict, Union, Optional
+from typing import Dict, Union, Optional, Tuple
 from datetime import datetime
 
 # Configuration and setup
@@ -68,7 +68,7 @@ def generate_sample_data() -> pd.DataFrame:
         'leads': np.random.randint(80, 120, 12),
         'appointments': np.random.randint(40, 60, 12),
         'closings': np.random.randint(20, 30, 12),
-        'cost': np.random.randint(5000, 8000, 12),
+        'cost': np.random.randint(5000, 8000, 12)
     }
     return pd.DataFrame(sample_data)
 
@@ -88,13 +88,13 @@ def calculate_metrics(df: DataFrameType) -> MetricsDict:
             'Cost per Closing': (df['cost'].sum() / df['closings'].sum() if df['closings'].sum() > 0 else 0),
             'Lead to Appointment Rate (%)': (df['appointments'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
             'Appointment to Close Rate (%)': (df['closings'].sum() / df['appointments'].sum() * 100 if df['appointments'].sum() > 0 else 0),
-            'Overall Close Rate (%)': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
+            'Overall Close Rate (%)': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0)
         }
 
         if not df.empty:
             metrics.update({
                 'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y'),
-                'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y'),
+                'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y')
             })
 
         return metrics
@@ -106,9 +106,10 @@ def calculate_metrics(df: DataFrameType) -> MetricsDict:
 def create_metrics_dashboard(df: DataFrameType) -> None:
     """Create and display metrics dashboard."""
     st.header("Key Metrics Dashboard")
-    metrics = calculate_metrics(df)
 
+    metrics = calculate_metrics(df)
     col1, col2, col3 = st.columns(3)
+
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
             formatted_value = (
@@ -184,14 +185,13 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
         ),
         textinfo="value+percent initial",
     ))
-
     fig.update_layout(title="Conversion Funnel Analysis")
     st.plotly_chart(fig, use_container_width=True)
 
 def train_forecast_model(df: DataFrameType) -> Tuple[Optional[ModelType], Dict[str, float]]:
     """Train forecasting model with proper feature names."""
     if len(df) < 2:
-        return None, {'error': 'insufficient data for modeling'}
+        return None, {'error': 'Insufficient data for modeling.'}
 
     try:
         x = df[['leads', 'appointments']]
@@ -216,7 +216,7 @@ def train_forecast_model(df: DataFrameType) -> Tuple[Optional[ModelType], Dict[s
 def predict_closings(model: Optional[ModelType], leads: float, appointments: float) -> Tuple[float, str]:
     """Make predictions with proper feature format."""
     if model is None:
-        return 0.0, "no model available"
+        return 0.0, "No model available"
 
     try:
         input_data = pd.DataFrame({
@@ -274,7 +274,7 @@ def main():
                 except Exception as e:
                     st.error(f"Error loading file: {str(e)}")
 
-            # Add current input to historical data
+            # Add manual input to historical data
             new_row = pd.DataFrame({
                 'month': [pd.Timestamp('now')],
                 'leads': [num_leads],
