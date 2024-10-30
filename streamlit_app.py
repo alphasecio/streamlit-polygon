@@ -13,7 +13,7 @@ from datetime import datetime
 # Configuration and setup
 st.set_page_config(layout="wide")
 
-# Improved CSS with better class naming and organization
+# Improved CSS for styling
 st.markdown("""
     <style>
     /* Metric styling */
@@ -59,7 +59,9 @@ st.markdown("""
 # Type definitions for better code organization
 MetricsDict = Dict[str, Union[float, str, int]]
 DataFrameType = pd.DataFrame
+ModelType = LinearRegression
 
+# Sample data generation function
 def generate_sample_data() -> pd.DataFrame:
     """Generate sample data for demonstration."""
     sample_data = {
@@ -191,10 +193,6 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
 if 'historical_data' not in st.session_state:
     st.session_state.historical_data = pd.DataFrame()
 
-# Primary app logic
-if 'historical_data' not in st.session_state:
-    st.session_state.historical_data = pd.DataFrame()
-
 def main():
     """Main application function"""
     st.title("Sales Pipeline Analytics Dashboard")
@@ -252,10 +250,13 @@ def main():
                 filtered_data = st.session_state.historical_data
                 add_goals_tracking(filtered_data)
                 create_metrics_dashboard(filtered_data)
+
                 st.header("Performance Analysis")
                 plot_interactive_trends(filtered_data)
+
                 st.header("Conversion Analysis")
                 plot_conversion_funnel(filtered_data)
+
                 st.header("Seasonality Analysis")
                 metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
 
@@ -274,16 +275,61 @@ def main():
             forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
 
             if not st.session_state.historical_data.empty:
-                # Forecasting logic goes here...
-                pass
+                # Train the forecasting model
+                model, model_metrics = train_forecast_model(st.session_state.historical_data)
+
+                if model is not None:
+                    # Make predictions
+                    forecasted_closings, prediction_status = predict_closings(model, num_leads, num_appointments)
+
+                    if prediction_status == "success":
+                        forecasted_revenue = forecasted_closings * average_revenue_per_closing
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
+                        with col2:
+                            st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
+
+                        # Display model metrics
+                        st.subheader("Model Performance Metrics")
+                        col1, col2, col3 = st.columns(3)
+
+                        col1.metric("Mean Absolute Error", f"{model_metrics['mae']:.2f}")
+                        col2.metric("Root Mean Square Error", f"{model_metrics['rmse']:.2f}")
+                        col3.metric("R² Score", f"{model_metrics['r2']:.2f}")
+
+                        if model_metrics['r2'] < 0.5:
+                            st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+                    else:
+                        st.error(f"Prediction error: {prediction_status}")
             else:
                 st.warning("No data available for forecasting. Please upload data.")
 
         with tab4:
             st.header("Export Data")
             if not st.session_state.historical_data.empty:
-                # Export logic goes here...
-                pass
+                forecast_data = {
+                    'Metric': ['Forecasted Closings', 'Forecasted Revenue'],
+                    'Value': [forecasted_closings, forecasted_revenue]
+                }
+
+                # Create Excel file
+                excel_data = export_to_excel(st.session_state.historical_data, forecast_data)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(label="Download Full Report (Excel)", data=excel_data, 
+                                       file_name='sales_forecast_report.xlsx', 
+                                       mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+                with col2:
+                    csv = st.session_state.historical_data.to_csv(index=False).encode('utf-8')
+                    st.download_button(label="Download Historical Data (CSV)", data=csv, 
+                                       file_name='historical_data.csv', mime='text/csv')
+
+                st.subheader("Export Preview")
+                st.dataframe(st.session_state.historical_data)
             else:
                 st.warning("No data available for export. Please upload data.")
 
