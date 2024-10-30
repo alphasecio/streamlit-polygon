@@ -175,7 +175,15 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
     values = [df['leads'].sum(), df['appointments'].sum(), df['closings'].sum()]
     labels = ['Leads', 'Appointments', 'Closings']
 
-    fig = go.Figure(go.Funnel(y=labels, x=values))
+    fig = go.Figure(go.Funnel(
+        y=labels,
+        x=values,
+        marker=dict(
+            color=["#2196f3", "#4caf50", "#ffc107"]  # Different colors for each part of the funnel
+        ),
+        textinfo="value+percent initial",
+    ))
+
     fig.update_layout(title="Conversion Funnel Analysis")
     st.plotly_chart(fig, use_container_width=True)
 
