@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression  # Fixed class name
+from sklearn.linear_model import LinearRegression  # Corrected class name
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.seasonal import seasonal_decompose
 import plotly.express as px
 import plotly.graph_objects as go
 import io
-from typing import Dict, Union, Optional, Tuple, Any
+from typing import Dict, Union, Optional, Any
 from datetime import datetime
 
 # Configuration and setup
@@ -19,7 +19,7 @@ st.markdown("""
     /* Metric styling */
     .stmetric .stmetriclabel {
         font-size: 14px !important;
-        font-weight: 500; 
+        font-weight: 500;
         color: #2c3e50;
     }
     .stmetric .stmetricvalue {
@@ -49,7 +49,7 @@ st.markdown("""
         color: #0f3460;
     }
 
-    /* Progress bar styling */
+    /* Progress bar styles */
     .stprogress > div > div {
         background-color: #4caf50;
     }
@@ -59,7 +59,6 @@ st.markdown("""
 # Type definitions for better code organization
 MetricsDict = Dict[str, Union[float, str, int]]
 DataFrameType = pd.DataFrame
-ModelType = LinearRegression
 
 def generate_sample_data() -> pd.DataFrame:
     """Generate sample data for demonstration."""
@@ -112,7 +111,7 @@ def create_metrics_dashboard(df: DataFrameType) -> None:
     for i, (metric, value) in enumerate(metrics.items()):
         with [col1, col2, col3][i % 3]:
             formatted_value = (
-                f"{value:.1f} %" if "rate" in metric.lower() else
+                f"{value:.1f}%" if "rate" in metric.lower() else
                 f"${value:,.2f}" if "cost" in metric.lower() else
                 f"{value:,.0f}" if isinstance(value, (float, int)) else
                 value
@@ -155,19 +154,11 @@ def plot_seasonality_analysis(df: DataFrameType, metric: str) -> Optional[go.Fig
         return None  # Exit the function if there isn't enough data
 
     try:
-        # Ensure data is properly sorted and indexed
-        df_sorted = df.sort_values('month').copy()
-        df_sorted.set_index('month', inplace=True)
-
-        # Perform decomposition
-        decomposed = seasonal_decompose(df_sorted[metric], model='additive', period=12)
-
-        # Create figure
+        decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name='Trend'))
         fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, name='Seasonal'))
-
-        fig.update_layout(title=f"Seasonality and Trend for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
+        fig.update_layout(title=f"Seasonality and Trend Analysis for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
         return fig
     except Exception as e:
         st.error(f"Error in seasonal decomposition: {str(e)}")
@@ -193,30 +184,96 @@ if 'historical_data' not in st.session_state:
     st.session_state.historical_data = pd.DataFrame()
 
 def main():
-    st.title("Sales Pipeline Analytics and Forecasting Dashboard")
+    """Main application function"""
+    st.title("Sales Pipeline Analytics Dashboard")
 
     with st.container():
-        tab1, tab2, tab3, tab4 = st.tabs(["Input & Upload", "Analysis", "Forecasting", "Export"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📝 Input & Upload", "📊 Analysis", "📈 Forecasting", "💾 Export"])
 
         with tab1:
             st.header("Input Your Data Manually")
-            # Input and upload logic goes here...
+            col1, col2 = st.columns(2)
+
+            with col1:
+                num_leads = st.number_input("Number of Leads:", min_value=0, value=100)
+                num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50)
+
+            with col2:
+                num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
+                average_revenue_per_closing = st.number_input("Average Revenue per Closing ($):", min_value=0.0, value=10000.0)
+                cost = st.number_input("Total Cost (Enter 0 if None):", min_value=0.0, value=0.0)
+
+            st.header("Upload Historical Data")
+            uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"])
+
+            if uploaded_file is not None:
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        st.session_state.historical_data = pd.read_csv(uploaded_file)
+                    else:
+                        st.session_state.historical_data = pd.read_excel(uploaded_file)
+
+                    st.session_state.historical_data['month'] = pd.to_datetime(st.session_state.historical_data['month'], errors='coerce')
+                    st.session_state.historical_data.dropna(subset=['month'], inplace=True)
+                    st.write("Uploaded Data Overview:")
+                    st.dataframe(st.session_state.historical_data)
+                except Exception as e:
+                    st.error(f"Error loading file: {str(e)}")
+
+            # Add current input to historical data
+            new_row = pd.DataFrame({
+                'month': [pd.Timestamp('now')],
+                'leads': [num_leads],
+                'appointments': [num_appointments],
+                'closings': [num_closings],
+                'cost': [cost]
+            })
+
+            st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
+
+            st.write("Combined Data Overview:")
+            st.dataframe(st.session_state.historical_data)
+            create_metrics_dashboard(st.session_state.historical_data)
 
         with tab2:
-            if st.session_state.historical_data.empty:
-                st.warning("No data available for analysis. Please upload data.")
+            if not st.session_state.historical_data.empty:
+                filtered_data = st.session_state.historical_data
+                add_goals_tracking(filtered_data)
+                create_metrics_dashboard(filtered_data)
+                st.header("Performance Analysis")
+                plot_interactive_trends(filtered_data)
+                st.header("Conversion Analysis")
+                plot_conversion_funnel(filtered_data)
+                st.header("Seasonality Analysis")
+                metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
+
+                if len(filtered_data) >= 24:
+                    fig = plot_seasonality_analysis(filtered_data, metric_choice)
+                    if fig is not None:
+                        st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Need at least 24 months of data for reliable seasonality analysis.")
             else:
-                # Analysis logic goes here...
-                st.header("Performance Metrics")
-                create_metrics_dashboard(st.session_state.historical_data)
+                st.warning("No data available for analysis. Please upload data.")
 
         with tab3:
             st.header("Forecast Analysis")
-            # Forecasting logic goes here...
+            st.subheader("Model Configuration")
+            forecast_periods = st.slider("Forecast Periods (Months):", 1, 12, 3)
+
+            if not st.session_state.historical_data.empty:
+                # Forecasting logic goes here...
+                pass
+            else:
+                st.warning("No data available for forecasting. Please upload data.")
 
         with tab4:
             st.header("Export Data")
-            # Export logic goes here...
+            if not st.session_state.historical_data.empty:
+                # Export logic goes here...
+                pass
+            else:
+                st.warning("No data available for export. Please upload data.")
 
 if __name__ == "__main__":
     main()
