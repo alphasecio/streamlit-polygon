@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression  # Corrected class name
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.seasonal import seasonal_decompose
 import plotly.express as px
 import plotly.graph_objects as go
 import io
-from typing import Dict, Union, Optional, Tuple
+from typing import Dict, Union, Optional, Tuple, Any
 from datetime import datetime
 
 # Configuration and setup
@@ -56,21 +56,29 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Type definitions for better code organization
+# Type definitions
 MetricsDict = Dict[str, Union[float, str, int]]
 DataFrameType = pd.DataFrame
-ModelType = LinearRegression  # Corrected model type
+ModelType = LinearRegression
 
 def generate_sample_data() -> pd.DataFrame:
     """Generate sample data for demonstration."""
     sample_data = {
-        'month': pd.date_range(start='2023-01-01', periods=12, freq='M'),
+        'month': pd.date_range(start='2023-01-01', periods=12, freq='ME'),  # Fixed frequency
         'leads': np.random.randint(80, 120, 12),
         'appointments': np.random.randint(40, 60, 12),
         'closings': np.random.randint(20, 30, 12),
         'cost': np.random.randint(5000, 8000, 12)
     }
     return pd.DataFrame(sample_data)
+
+def create_excel_template() -> bytes:
+    """Create an Excel template file with sample data."""
+    sample_df = generate_sample_data()
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        sample_df.to_excel(writer, index=False)
+    return output.getvalue()
 
 def calculate_metrics(df: DataFrameType) -> MetricsDict:
     """Calculate business metrics including cost metrics."""
@@ -151,16 +159,18 @@ def add_goals_tracking(df: DataFrameType) -> None:
 
 def plot_seasonality_analysis(df: DataFrameType, metric: str) -> Optional[go.Figure]:
     """Plot seasonal decomposition analysis."""
-    if len(df) < 24:  # Check if we have less than 24 observations
+    if len(df) < 24:
         st.warning("Not enough data for seasonal decomposition. Please provide at least 24 observations.")
-        return None  # Exit the function if there isn't enough data
+        return None
 
     try:
         decomposed = seasonal_decompose(df.set_index('month')[metric], model='additive', period=12)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=decomposed.trend.index, y=decomposed.trend, name='Trend'))
         fig.add_trace(go.Scatter(x=decomposed.seasonal.index, y=decomposed.seasonal, name='Seasonal'))
-        fig.update_layout(title=f"Seasonality and Trend Analysis for {metric.capitalize()}", xaxis_title="Date", yaxis_title=metric.capitalize())
+        fig.update_layout(title=f"Seasonality and Trend Analysis for {metric.capitalize()}", 
+                         xaxis_title="Date", 
+                         yaxis_title=metric.capitalize())
         return fig
     except Exception as e:
         st.error(f"Error in seasonal decomposition: {str(e)}")
@@ -168,7 +178,8 @@ def plot_seasonality_analysis(df: DataFrameType, metric: str) -> Optional[go.Fig
 
 def plot_interactive_trends(df: DataFrameType) -> None:
     """Plot interactive historical trends."""
-    fig = px.line(df, x='month', y=['leads', 'appointments', 'closings'], title="Historical Performance Trends")
+    fig = px.line(df, x='month', y=['leads', 'appointments', 'closings'], 
+                  title="Historical Performance Trends")
     fig.update_layout(xaxis_title="Month", yaxis_title="Values")
     st.plotly_chart(fig, use_container_width=True)
 
@@ -181,7 +192,7 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
         y=labels,
         x=values,
         marker=dict(
-            color=["#2196f3", "#4caf50", "#ffc107"]  # Different colors for each part of the funnel
+            color=["#2196f3", "#4caf50", "#ffc107"]
         ),
         textinfo="value+percent initial",
     ))
@@ -191,21 +202,23 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
 def train_forecast_model(df: DataFrameType) -> Tuple[Optional[ModelType], Dict[str, float]]:
     """Train forecasting model with proper feature names."""
     if len(df) < 2:
-        return None, {'error': 'Insufficient data for modeling.'}
+        return None, {'error': 'Insufficient data for modeling'}
 
     try:
-        x = df[['leads', 'appointments']]
+        X = pd.DataFrame({
+            'leads': df['leads'],
+            'appointments': df['appointments']
+        })
         y = df['closings']
 
         model = LinearRegression()
-        model.fit(x, y)
+        model.fit(X, y)
 
-        # Calculate performance metrics
-        y_pred = model.predict(x)
+        y_pred = model.predict(X)
         metrics = {
             'mae': mean_absolute_error(y, y_pred),
             'rmse': np.sqrt(mean_squared_error(y, y_pred)),
-            'r2': model.score(x, y) if len(df) > 2 else np.nan
+            'r2': model.score(X, y) if len(df) > 2 else np.nan
         }
 
         return model, metrics
@@ -237,6 +250,10 @@ def export_to_excel(df: DataFrameType, forecasts: Dict[str, Any]) -> bytes:
         pd.DataFrame(forecasts).to_excel(writer, sheet_name='Forecasts', index=False)
     return output.getvalue()
 
+# Initialize session state
+if 'historical_data' not in st.session_state:
+    st.session_state.historical_data = pd.DataFrame()
+
 def main():
     """Main application function"""
     st.title("Sales Pipeline Analytics Dashboard")
@@ -245,49 +262,79 @@ def main():
         tab1, tab2, tab3, tab4 = st.tabs(["📝 Input & Upload", "📊 Analysis", "📈 Forecasting", "💾 Export"])
 
         with tab1:
-            st.header("Input Your Data Manually")
+            st.header("Input Your Data")
             col1, col2 = st.columns(2)
-
+            
             with col1:
                 num_leads = st.number_input("Number of Leads:", min_value=0, value=100)
                 num_appointments = st.number_input("Number of Appointments:", min_value=0, value=50)
 
             with col2:
                 num_closings = st.number_input("Number of Closings:", min_value=0, value=25)
-                average_revenue_per_closing = st.number_input("Average Revenue per Closing ($):", min_value=0.0, value=10000.0)
-                cost = st.number_input("Total Cost (Enter 0 if None):", min_value=0.0, value=0.0)
+                average_revenue_per_closing = st.number_input("Average Revenue per Closing ($):", 
+                                                            min_value=0.0, value=10000.0)
+                cost = st.number_input("Total Cost ($):", min_value=0.0, value=0.0)
 
             st.header("Upload Historical Data")
+            
+            # Sample data and templates
+            st.subheader("Download Templates")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                sample_df = generate_sample_data()
+                csv = sample_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Sample CSV",
+                    data=csv,
+                    file_name='sample_data.csv',
+                    mime='text/csv'
+                )
+            
+            with col2:
+                excel_data = create_excel_template()
+                st.download_button(
+                    label="Download Excel Template",
+                    data=excel_data,
+                    file_name='template.xlsx',
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+
             uploaded_file = st.file_uploader("Upload Your Data File", type=["csv", "xlsx"])
 
             if uploaded_file is not None:
                 try:
                     if uploaded_file.name.endswith('.csv'):
-                        st.session_state.historical_data = pd.read_csv(uploaded_file)
+                        data = pd.read_csv(uploaded_file)
                     else:
-                        st.session_state.historical_data = pd.read_excel(uploaded_file)
+                        data = pd.read_excel(uploaded_file)
 
-                    st.session_state.historical_data['month'] = pd.to_datetime(st.session_state.historical_data['month'], errors='coerce')
-                    st.session_state.historical_data.dropna(subset=['month'], inplace=True)
+                    data['month'] = pd.to_datetime(data['month'], errors='coerce')
+                    data.dropna(subset=['month'], inplace=True)
+                    st.session_state.historical_data = data
                     st.write("Uploaded Data Overview:")
-                    st.dataframe(st.session_state.historical_data)
+                    st.dataframe(data)
                 except Exception as e:
                     st.error(f"Error loading file: {str(e)}")
 
             # Add manual input to historical data
             new_row = pd.DataFrame({
-                'month': [pd.Timestamp('now')],
+                'month': [pd.Timestamp.now()],
                 'leads': [num_leads],
                 'appointments': [num_appointments],
                 'closings': [num_closings],
                 'cost': [cost]
             })
 
-            st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_row], ignore_index=True)
+            if not st.session_state.historical_data.empty:
+                st.session_state.historical_data = pd.concat(
+                    [st.session_state.historical_data, new_row], 
+                    ignore_index=True
+                )
 
-            st.write("Combined Data Overview:")
-            st.dataframe(st.session_state.historical_data)
-            create_metrics_dashboard(st.session_state.historical_data)
+                st.write("Combined Data Overview:")
+                st.dataframe(st.session_state.historical_data)
+                create_metrics_dashboard(st.session_state.historical_data)
 
         with tab2:
             if not st.session_state.historical_data.empty:
@@ -302,7 +349,10 @@ def main():
                 plot_conversion_funnel(filtered_data)
 
                 st.header("Seasonality Analysis")
-                metric_choice = st.selectbox("Select Metric for Seasonality Analysis:", ['leads', 'appointments', 'closings'])
+                metric_choice = st.selectbox(
+                    "Select Metric for Seasonality Analysis:", 
+                    ['leads', 'appointments', 'closings']
+                )
 
                 if len(filtered_data) >= 24:
                     fig = plot_seasonality_analysis(filtered_data, metric_choice)
@@ -324,27 +374,54 @@ def main():
 
                 if model is not None:
                     # Make predictions
-                    forecasted_closings, prediction_status = predict_closings(model, num_leads, num_appointments)
+                    forecasted_closings, prediction_status = predict_closings(
+                        model, num_leads, num_appointments
+                    )
 
                     if prediction_status == "success":
                         forecasted_revenue = forecasted_closings * average_revenue_per_closing
 
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
+                            st.metric(
+                                "Forecasted Closings",
+                                f"{forecasted_closings:.1f}",
+                                help="Predicted number of closings based on current leads and appointments"
+                            )
                         with col2:
-                            st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
+                            st.metric(
+                                "Forecasted Revenue",
+                                f"${forecasted_revenue:,.2f}",
+                                help="Predicted revenue based on forecasted closings"
+                            )
 
                         # Display model metrics
                         st.subheader("Model Performance Metrics")
                         col1, col2, col3 = st.columns(3)
 
-                        col1.metric("Mean Absolute Error", f"{model_metrics['mae']:.2f}")
-                        col2.metric("Root Mean Square Error", f"{model_metrics['rmse']:.2f}")
-                        col3.metric("R² Score", f"{model_metrics['r2']:.2f}")
+                        col1.metric(
+                            "Mean Absolute Error",
+                            f"{model_metrics['mae']:.2f}",
+                            help="Average absolute difference between predicted and actual values"
+                        )
+                        col2.metric(
+                            "Root Mean Square Error",
+                            f"{model_metrics['rmse']:.2f}",
+                            help="Square root of the average squared differences"
+                        )
 
-                        if model_metrics['r2'] < 0.5:
-                            st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+                        if not np.isnan(model_metrics['r2']):
+                            r2_value = model_metrics['r2']
+                            col3.metric(
+                                "R² Score",
+                                f"{r2_value:.2f}",
+                                help="Proportion of variance explained by the model"
+                            )
+
+                            if r2_value < 0.5:
+                                st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+                        else:
+                            st.info("R² score requires more than two samples for calculation.")
                     else:
                         st.error(f"Prediction error: {prediction_status}")
             else:
@@ -353,9 +430,11 @@ def main():
         with tab4:
             st.header("Export Data")
             if not st.session_state.historical_data.empty:
+                # Prepare forecast data
                 forecast_data = {
                     'Metric': ['Forecasted Closings', 'Forecasted Revenue'],
-                    'Value': [forecasted_closings, forecasted_revenue]
+                    'Value': [forecasted_closings, forecasted_revenue],
+                    'Date': [datetime.now().strftime('%Y-%m-%d')] * 2
                 }
 
                 # Create Excel file
@@ -363,19 +442,34 @@ def main():
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.download_button(label="Download Full Report (Excel)", data=excel_data, 
-                                       file_name='sales_forecast_report.xlsx', 
-                                       mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                    st.download_button(
+                        label="Download Full Report (Excel)",
+                        data=excel_data,
+                        file_name='sales_forecast_report.xlsx',
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        help="Download complete report including historical data and forecasts"
+                    )
 
                 with col2:
                     csv = st.session_state.historical_data.to_csv(index=False).encode('utf-8')
-                    st.download_button(label="Download Historical Data (CSV)", data=csv, 
-                                       file_name='historical_data.csv', mime='text/csv')
+                    st.download_button(
+                        label="Download Historical Data (CSV)",
+                        data=csv,
+                        file_name='historical_data.csv',
+                        mime='text/csv',
+                        help="Download historical data only"
+                    )
 
                 st.subheader("Export Preview")
-                st.dataframe(st.session_state.historical_data)
+                st.dataframe(st.session_state.historical_data, use_container_width=True)
+
+                # Show summary metrics
+                st.subheader("Summary Metrics")
+                metrics_preview = calculate_metrics(st.session_state.historical_data)
+                st.json(metrics_preview)
             else:
                 st.warning("No data available for export. Please upload data.")
 
 if __name__ == "__main__":
     main()
+                
