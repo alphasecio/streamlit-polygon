@@ -191,6 +191,10 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
 if 'historical_data' not in st.session_state:
     st.session_state.historical_data = pd.DataFrame()
 
+# Primary app logic
+if 'historical_data' not in st.session_state:
+    st.session_state.historical_data = pd.DataFrame()
+
 def main():
     """Main application function"""
     st.title("Sales Pipeline Analytics Dashboard")
