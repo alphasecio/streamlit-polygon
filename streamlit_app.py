@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression  # Corrected class name
+from sklearn.linear_model import LinearRegression  # Corrected the class name
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.seasonal import seasonal_decompose
 import plotly.express as px
 import plotly.graph_objects as go
 import io
-from typing import Dict, Union, Optional, Any
+from typing import Dict, Union, Optional
 from datetime import datetime
 
 # Configuration and setup
@@ -59,9 +59,7 @@ st.markdown("""
 # Type definitions for better code organization
 MetricsDict = Dict[str, Union[float, str, int]]
 DataFrameType = pd.DataFrame
-ModelType = LinearRegression
 
-# Sample data generation function
 def generate_sample_data() -> pd.DataFrame:
     """Generate sample data for demonstration."""
     sample_data = {
@@ -193,6 +191,14 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
 if 'historical_data' not in st.session_state:
     st.session_state.historical_data = pd.DataFrame()
 
+def export_to_excel(df: DataFrameType, forecasts: dict[str, Any]) -> bytes:
+    """Create and return an Excel file with data and forecasts."""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Historical Data', index=False)
+        pd.DataFrame(forecasts).to_excel(writer, sheet_name='Forecasts', index=False)
+    return output.getvalue()
+
 def main():
     """Main application function"""
     st.title("Sales Pipeline Analytics Dashboard")
@@ -276,33 +282,37 @@ def main():
 
             if not st.session_state.historical_data.empty:
                 # Train the forecasting model
-                model, model_metrics = train_forecast_model(st.session_state.historical_data)
+                model = LinearRegression()
+                x = st.session_state.historical_data[['leads', 'appointments']]
+                y = st.session_state.historical_data['closings']
+                model.fit(x, y)
 
-                if model is not None:
-                    # Make predictions
-                    forecasted_closings, prediction_status = predict_closings(model, num_leads, num_appointments)
+                # Making predictions
+                input_data = np.array([[num_leads, num_appointments]]).reshape(1, -1)
+                forecasted_closings = max(0, model.predict(input_data)[0])
+                forecasted_revenue = forecasted_closings * average_revenue_per_closing
 
-                    if prediction_status == "success":
-                        forecasted_revenue = forecasted_closings * average_revenue_per_closing
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
+                with col2:
+                    st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
 
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
-                        with col2:
-                            st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
+                # Display model performance metrics
+                y_pred = model.predict(x)
+                mae = mean_absolute_error(y, y_pred)
+                rmse = np.sqrt(mean_squared_error(y, y_pred))
+                r2 = model.score(x, y)
 
-                        # Display model metrics
-                        st.subheader("Model Performance Metrics")
-                        col1, col2, col3 = st.columns(3)
+                st.subheader("Model Performance Metrics")
+                col1, col2, col3 = st.columns(3)
 
-                        col1.metric("Mean Absolute Error", f"{model_metrics['mae']:.2f}")
-                        col2.metric("Root Mean Square Error", f"{model_metrics['rmse']:.2f}")
-                        col3.metric("R² Score", f"{model_metrics['r2']:.2f}")
+                col1.metric("Mean Absolute Error", f"{mae:.2f}")
+                col2.metric("Root Mean Square Error", f"{rmse:.2f}")
+                col3.metric("R² Score", f"{r2:.2f}")
 
-                        if model_metrics['r2'] < 0.5:
-                            st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
-                    else:
-                        st.error(f"Prediction error: {prediction_status}")
+                if r2 < 0.5:
+                    st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
             else:
                 st.warning("No data available for forecasting. Please upload data.")
 
