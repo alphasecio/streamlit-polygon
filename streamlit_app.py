@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression  # Corrected the class name
+from sklearn.linear_model import LinearRegression  # Corrected class name
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.seasonal import seasonal_decompose
 import plotly.express as px
@@ -59,6 +59,7 @@ st.markdown("""
 # Type definitions for better code organization
 MetricsDict = Dict[str, Union[float, str, int]]
 DataFrameType = pd.DataFrame
+ModelType = LinearRegression  # Corrected model type
 
 def generate_sample_data() -> pd.DataFrame:
     """Generate sample data for demonstration."""
@@ -67,7 +68,7 @@ def generate_sample_data() -> pd.DataFrame:
         'leads': np.random.randint(80, 120, 12),
         'appointments': np.random.randint(40, 60, 12),
         'closings': np.random.randint(20, 30, 12),
-        'cost': np.random.randint(5000, 8000, 12)
+        'cost': np.random.randint(5000, 8000, 12),
     }
     return pd.DataFrame(sample_data)
 
@@ -87,13 +88,13 @@ def calculate_metrics(df: DataFrameType) -> MetricsDict:
             'Cost per Closing': (df['cost'].sum() / df['closings'].sum() if df['closings'].sum() > 0 else 0),
             'Lead to Appointment Rate (%)': (df['appointments'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
             'Appointment to Close Rate (%)': (df['closings'].sum() / df['appointments'].sum() * 100 if df['appointments'].sum() > 0 else 0),
-            'Overall Close Rate (%)': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0)
+            'Overall Close Rate (%)': (df['closings'].sum() / df['leads'].sum() * 100 if df['leads'].sum() > 0 else 0),
         }
 
         if not df.empty:
             metrics.update({
                 'Best Month (Closings)': df.loc[df['closings'].idxmax(), 'month'].strftime('%b %y'),
-                'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y')
+                'Worst Month (Closings)': df.loc[df['closings'].idxmin(), 'month'].strftime('%b %y'),
             })
 
         return metrics
@@ -187,11 +188,48 @@ def plot_conversion_funnel(df: DataFrameType) -> None:
     fig.update_layout(title="Conversion Funnel Analysis")
     st.plotly_chart(fig, use_container_width=True)
 
-# Primary app logic
-if 'historical_data' not in st.session_state:
-    st.session_state.historical_data = pd.DataFrame()
+def train_forecast_model(df: DataFrameType) -> Tuple[Optional[ModelType], Dict[str, float]]:
+    """Train forecasting model with proper feature names."""
+    if len(df) < 2:
+        return None, {'error': 'insufficient data for modeling'}
 
-def export_to_excel(df: DataFrameType, forecasts: dict[str, Any]) -> bytes:
+    try:
+        x = df[['leads', 'appointments']]
+        y = df['closings']
+
+        model = LinearRegression()
+        model.fit(x, y)
+
+        # Calculate performance metrics
+        y_pred = model.predict(x)
+        metrics = {
+            'mae': mean_absolute_error(y, y_pred),
+            'rmse': np.sqrt(mean_squared_error(y, y_pred)),
+            'r2': model.score(x, y) if len(df) > 2 else np.nan
+        }
+
+        return model, metrics
+    except Exception as e:
+        st.error(f"Error training model: {str(e)}")
+        return None, {'error': str(e)}
+
+def predict_closings(model: Optional[ModelType], leads: float, appointments: float) -> Tuple[float, str]:
+    """Make predictions with proper feature format."""
+    if model is None:
+        return 0.0, "no model available"
+
+    try:
+        input_data = pd.DataFrame({
+            'leads': [leads],
+            'appointments': [appointments]
+        })
+
+        prediction = model.predict(input_data)[0]
+        return max(0.0, prediction), "success"
+    except Exception as e:
+        return 0.0, str(e)
+
+def export_to_excel(df: DataFrameType, forecasts: Dict[str, Any]) -> bytes:
     """Create and return an Excel file with data and forecasts."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -282,37 +320,33 @@ def main():
 
             if not st.session_state.historical_data.empty:
                 # Train the forecasting model
-                model = LinearRegression()
-                x = st.session_state.historical_data[['leads', 'appointments']]
-                y = st.session_state.historical_data['closings']
-                model.fit(x, y)
+                model, model_metrics = train_forecast_model(st.session_state.historical_data)
 
-                # Making predictions
-                input_data = np.array([[num_leads, num_appointments]]).reshape(1, -1)
-                forecasted_closings = max(0, model.predict(input_data)[0])
-                forecasted_revenue = forecasted_closings * average_revenue_per_closing
+                if model is not None:
+                    # Make predictions
+                    forecasted_closings, prediction_status = predict_closings(model, num_leads, num_appointments)
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
-                with col2:
-                    st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
+                    if prediction_status == "success":
+                        forecasted_revenue = forecasted_closings * average_revenue_per_closing
 
-                # Display model performance metrics
-                y_pred = model.predict(x)
-                mae = mean_absolute_error(y, y_pred)
-                rmse = np.sqrt(mean_squared_error(y, y_pred))
-                r2 = model.score(x, y)
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Forecasted Closings", f"{forecasted_closings:.1f}")
+                        with col2:
+                            st.metric("Forecasted Revenue", f"${forecasted_revenue:,.2f}")
 
-                st.subheader("Model Performance Metrics")
-                col1, col2, col3 = st.columns(3)
+                        # Display model metrics
+                        st.subheader("Model Performance Metrics")
+                        col1, col2, col3 = st.columns(3)
 
-                col1.metric("Mean Absolute Error", f"{mae:.2f}")
-                col2.metric("Root Mean Square Error", f"{rmse:.2f}")
-                col3.metric("R² Score", f"{r2:.2f}")
+                        col1.metric("Mean Absolute Error", f"{model_metrics['mae']:.2f}")
+                        col2.metric("Root Mean Square Error", f"{model_metrics['rmse']:.2f}")
+                        col3.metric("R² Score", f"{model_metrics['r2']:.2f}")
 
-                if r2 < 0.5:
-                    st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+                        if model_metrics['r2'] < 0.5:
+                            st.warning("Warning: Model fit is poor. Predictions may be unreliable.")
+                    else:
+                        st.error(f"Prediction error: {prediction_status}")
             else:
                 st.warning("No data available for forecasting. Please upload data.")
 
