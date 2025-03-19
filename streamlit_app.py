@@ -126,8 +126,8 @@ if button:
                 fin_metrics = [
                      ("Financial Metrics", "Value"),
                     ("Fiscal Period", item.fiscal_period + " " + item.fiscal_year),
-                    ("Total Assets", format_value(item.financials.balance_sheet['assets'].value)),
-                    ("Total Liabilities", format_value(item.financials.balance_sheet['liabilities'].value)),
+                    ("Total Assets", format_value(item.financials.balance_sheet.assets.value)),
+                    ("Total Liabilities", format_value(item.financials.balance_sheet.liabilities.value)),
                     ("Revenues", format_value(item.financials.income_statement.revenues.value)),
                     ("Net Cash Flow", format_value(item.financials.cash_flow_statement.net_cash_flow.value)),
                     ("Basic EPS", f"${item.financials.income_statement.basic_earnings_per_share.value}")
