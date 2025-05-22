@@ -96,7 +96,7 @@ if button:
                     ("Market Cap", format_value(info.market_cap)),
                     ("Employees", f"{'{:,.0f}'.format(info.total_employees)}"),
                     ("Website", info.homepage_url.replace("https://", "")),
-                    ("Float", format_value(info.share_class_shares_outstanding))
+                    ("Float", f"{'{:,.0f}'.format(info.share_class_shares_outstanding)}")
                 ]
                 
                 df = pd.DataFrame(stock_info[1:], columns=stock_info[0])
