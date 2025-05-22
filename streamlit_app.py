@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import yfinance as yf
 from polygon import RESTClient
 from datetime import datetime, timedelta
 
@@ -68,6 +69,9 @@ if button:
                 info = client.get_ticker_details(ticker)
                 st.subheader(f"{ticker} - {info.name}")
 
+                # Retrieve stock ticker details from yahoo finance
+                yinfo = yf.Ticker(ticker)
+
                 # Plot historical price chart for the last 30 days
                 end_date = datetime.now().date()
                 start_date = end_date - timedelta(days=30)
@@ -96,7 +100,7 @@ if button:
                     ("Market Cap", format_value(info.market_cap)),
                     ("Employees", f"{'{:,.0f}'.format(info.total_employees)}"),
                     ("Website", info.homepage_url.replace("https://", "")),
-                    ("Float", f"{'{:,.0f}'.format(info.share_class_shares_outstanding)}")
+                    ("Float", f"{'{:,.0f}'.format(yinfo.floatShares)}")
                 ]
                 
                 df = pd.DataFrame(stock_info[1:], columns=stock_info[0])
