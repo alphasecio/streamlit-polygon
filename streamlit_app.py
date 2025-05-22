@@ -71,6 +71,7 @@ if button:
 
                 # Retrieve stock ticker details from yahoo finance
                 yinfo = yf.Ticker(ticker)
+                float_shares = yinfo.info['floatShares']
 
                 # Plot historical price chart for the last 30 days
                 end_date = datetime.now().date()
@@ -100,7 +101,7 @@ if button:
                     ("Market Cap", format_value(info.market_cap)),
                     ("Employees", f"{'{:,.0f}'.format(info.total_employees)}"),
                     ("Website", info.homepage_url.replace("https://", "")),
-                    ("Float", f"{'{:,.0f}'.format(yinfo.floatShares)}")
+                    ("Float", f"{'{:,.0f}'.format(float_shares)}")
                 ]
                 
                 df = pd.DataFrame(stock_info[1:], columns=stock_info[0])
