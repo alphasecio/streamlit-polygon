@@ -110,7 +110,7 @@ if button:
                     ("Prev Day Open", f"${agg[0].open:.2f}"),
                     ("Prev Day High", f"${agg[0].high:.2f}"),
                     ("Prev Day Low", f"${agg[0].low:.2f}"),
-                    ("Volume", f"{"{:,.0f}".format(agg[0].volume)}"),
+                    ("Volume", f"{'{:,.0f}'.format(agg[0].volume)}"),
                     ("VW Avg Price", f"${agg[0].vwap:.2f}")
                 ]
                 
