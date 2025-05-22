@@ -94,7 +94,7 @@ if button:
                     ("Primary Exchange", get_exchange_name(info.primary_exchange)),
                     ("Listing Date", info.list_date),
                     ("Market Cap", format_value(info.market_cap)),
-                    ("Employees", f"{"{:,.0f}".format(info.total_employees)}"),
+                    ("Employees", f"{'{:,.0f}'.format(info.total_employees)}"),
                     ("Website", info.homepage_url.replace("https://", ""))
                 ]
                 
