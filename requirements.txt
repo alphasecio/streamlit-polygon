@@ -2,3 +2,4 @@ streamlit==1.45.0
 polygon-api-client==1.14.5
 pandas==2.2.3
 plotly-express==0.4.1
+yfinance==0.2.61

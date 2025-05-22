@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import yfinance as yf
 from polygon import RESTClient
 from datetime import datetime, timedelta
 
@@ -68,6 +69,10 @@ if button:
                 info = client.get_ticker_details(ticker)
                 st.subheader(f"{ticker} - {info.name}")
 
+                # Retrieve stock ticker details from yahoo finance
+                yinfo = yf.Ticker(ticker)
+                float_shares = yinfo.info['floatShares']
+
                 # Plot historical price chart for the last 30 days
                 end_date = datetime.now().date()
                 start_date = end_date - timedelta(days=30)
@@ -94,8 +99,9 @@ if button:
                     ("Primary Exchange", get_exchange_name(info.primary_exchange)),
                     ("Listing Date", info.list_date),
                     ("Market Cap", format_value(info.market_cap)),
-                    ("Employees", f"{"{:,.0f}".format(info.total_employees)}"),
-                    ("Website", info.homepage_url.replace("https://", ""))
+                    ("Employees", f"{'{:,.0f}'.format(info.total_employees)}"),
+                    ("Website", info.homepage_url.replace("https://", "")),
+                    ("Float", f"{'{:,.0f}'.format(float_shares)}")
                 ]
                 
                 df = pd.DataFrame(stock_info[1:], columns=stock_info[0])
@@ -110,7 +116,7 @@ if button:
                     ("Prev Day Open", f"${agg[0].open:.2f}"),
                     ("Prev Day High", f"${agg[0].high:.2f}"),
                     ("Prev Day Low", f"${agg[0].low:.2f}"),
-                    ("Volume", f"{"{:,.0f}".format(agg[0].volume)}"),
+                    ("Volume", f"{'{:,.0f}'.format(agg[0].volume)}"),
                     ("VW Avg Price", f"${agg[0].vwap:.2f}")
                 ]
                 
