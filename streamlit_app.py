@@ -40,12 +40,24 @@ def get_exchange_name(code):
 # Format market cap and financial info into readable values
 @st.cache_data
 def format_value(value):
+    if value is None:
+        return 'N/A'
+    try:
+        value = float(value)
+    except (ValueError, TypeError):
+        return str(value)
+    is_negative = value < 0
+    abs_value = abs(value)
+
     suffixes = ["", "K", "M", "B", "T"]
     suffix_index = 0
-    while value >= 1000 and suffix_index < len(suffixes) - 1:
-        value /= 1000
+
+    while abs_value >= 1000 and suffix_index < len(suffixes) - 1:
+        abs_value /= 1000
         suffix_index += 1
-    return f"${value:.1f}{suffixes[suffix_index]}"
+
+    formatted_num = f"{abs_value:.1f}{suffixes[suffix_index]}"
+    return f"-${formatted_num}" if is_negative else f"${formatted_num}"
 
 # If Submit button is clicked
 if button:
