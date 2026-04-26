@@ -1,5 +1,5 @@
 # streamlit-polygon
-This is a simple [Streamlit](https://streamlit.io/) web app that fetches and displays **real-time and historical stock data** using the [Polygon API](https://polygon.io/).
+This is a simple [Streamlit](https://streamlit.io/) web app that fetches and displays **real-time and historical stock data** using the [Massive API](https://massive.com/) (formerly Polygon.io).
 
 ### ✨ Features
 - Fetch detailed stock ticker information (company name, market cap, employees, website, etc.)
@@ -25,7 +25,7 @@ This is a simple [Streamlit](https://streamlit.io/) web app that fetches and dis
 ```bash
    streamlit run streamlit_app.py
 ```
-4. Get a free [Polygon API key](https://polygon.io/dashboard/keys) and input it in the sidebar along with a stock ticker (e.g., AAPL).
+4. Get a free [Massive API key](https://massive.com/dashboard/keys) and input it in the sidebar along with a stock ticker (e.g., AAPL).
 
 
 ### 🚀 Deploying to Railway
