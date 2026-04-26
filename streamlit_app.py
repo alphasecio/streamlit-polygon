@@ -15,7 +15,7 @@ st.set_page_config(page_title="Financial Analysis", layout="wide")
 with st.sidebar:
     st.title("Financial Analysis")
     ticker = st.text_input("Stock ticker (e.g. AAPL)", "AAPL")
-    polygon_api_key = st.text_input("Polygon API key", type="password")
+    polygon_api_key = st.text_input("Massive API key", type="password")
     button = st.button("Submit")
 
 # Authenticate with the Polygon API
@@ -150,6 +150,6 @@ if button:
 
         except Exception as e:
             if "too many 429 error responses" in str(e):
-                st.error("Max retries exceeded! Please upgrade your Polygon API plan or wait for a while...")
+                st.error("Max retries exceeded! Please upgrade your Massive API plan or wait for a while...")
             else:
                 st.exception(f"An error occurred: {e}")
